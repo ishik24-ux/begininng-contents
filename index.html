@@ -717,6 +717,62 @@ function addDragFolder(level,parentId,name){
  state.selectedStructureNode={level,name,path:buildPath(id)};
  render();
 }
+function openEditFolderModal(id){
+ const node=getNode(id);
+ if(!node||node.type!=='folder')return;
+ adminModalTitle.textContent='階層名を編集';
+ adminModalBody.innerHTML=`<div class="inline-form">
+  <label>階層名</label>
+  <input id="editFolderName" value="${node.title.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}">
+  <p class="form-note">配下の階層・動画はそのまま保持されます。</p>
+  <button class="btn" style="width:100%;margin-top:16px" onclick="saveFolderEdit('${id}')">変更を保存</button>
+ </div>`;
+ adminModal.classList.remove('hidden');
+ setTimeout(()=>document.getElementById('editFolderName')?.focus(),0);
+}
+function saveFolderEdit(id){
+ const node=getNode(id);
+ const input=document.getElementById('editFolderName');
+ const name=input?.value.trim();
+ if(!node||node.type!=='folder'||!name)return alert('階層名を入力してください');
+ snapshotTree();
+ const oldTitle=node.title;
+ node.title=name;
+ state.customFolders.forEach(f=>{
+  if(f.name===oldTitle)f.name=name;
+  if(f.parent===oldTitle)f.parent=name;
+ });
+ state.addedVideos.forEach(v=>{if(v.parent===oldTitle)v.parent=name});
+ state.selectedStructureNode={level:getDepth(id),name,path:buildPath(id)};
+ closeAdminModal();render();
+}
+function collectDescendantIds(id){
+ const ids=[];
+ getChildren(id).forEach(child=>{
+  ids.push(child.id);
+  if(child.type==='folder')ids.push(...collectDescendantIds(child.id));
+ });
+ return ids;
+}
+function deleteFolder(id){
+ const node=getNode(id);
+ if(!node||node.type!=='folder')return;
+ const descendants=collectDescendantIds(id);
+ const folderCount=descendants.filter(childId=>getNode(childId)?.type==='folder').length;
+ const videoCount=descendants.filter(childId=>getNode(childId)?.type==='video').length;
+ const detail=(folderCount||videoCount)?`\n配下の${folderCount}階層・${videoCount}動画も配置から削除されます。`:'';
+ if(!confirm(`「${node.title}」を削除しますか？${detail}`))return;
+ snapshotTree();
+ const oldParent=node.parent;
+ const removeIds=new Set([id,...descendants]);
+ const removedTitles=new Set(state.dragTree.filter(item=>removeIds.has(item.id)).map(item=>item.title));
+ state.dragTree=state.dragTree.filter(item=>!removeIds.has(item.id));
+ state.customFolders=state.customFolders.filter(f=>!removedTitles.has(f.name));
+ state.addedVideos=state.addedVideos.filter(v=>!removedTitles.has(v.title));
+ normalizeOrders(oldParent);
+ state.selectedStructureNode={level:1,name:'',path:''};
+ render();
+}
 function renderDragTree(parentId=null){
  return getChildren(parentId).map(n=>renderDragNode(n)).join('');
 }
@@ -738,7 +794,7 @@ function renderDragNode(n){
     <div class="h-sub">${n.type==='video'?'動画':'ドラッグで順番・親階層を変更できます'}</div>
    </div>
    <div class="h-actions" onclick="event.stopPropagation()">
-    ${n.type!=='video'?`<button class="icon-btn primary" onclick="openFolderModal(${Math.min(depth+1,4)},'${n.title.replace(/'/g,"\\'")}')">＋子階層</button><button class="icon-btn" onclick="openVideoModal('${n.title.replace(/'/g,"\\'")}')">＋動画</button>`:`<button class="icon-btn" onclick="go('videoManage')">動画管理</button>`}
+    ${n.type!=='video'?`<button class="icon-btn primary" onclick="openFolderModal(${Math.min(depth+1,4)},'${n.title.replace(/'/g,"\\'")}')">＋子階層</button><button class="icon-btn" onclick="openVideoModal('${n.title.replace(/'/g,"\\'")}')">＋動画</button><button class="icon-btn" onclick="openEditFolderModal('${n.id}')">編集</button><button class="icon-btn" onclick="deleteFolder('${n.id}')">削除</button>`:`<button class="icon-btn" onclick="go('videoManage')">動画管理</button>`}
    </div>
  </div>
  ${n.type!=='video'?renderDragTree(n.id):''}`;
@@ -822,6 +878,8 @@ function renderAccordionNode(n){
       <span class="drag-handle" title="ドラッグして移動">⠿</span>
       <button class="icon-btn primary" onclick="openFolderModal(${Math.min(depth+1,4)},'${n.title.replace(/'/g,"\\'")}')">＋子階層</button>
       <button class="icon-btn" onclick="openVideoModal('${n.title.replace(/'/g,"\\'")}')">＋動画</button>
+      <button class="icon-btn" onclick="openEditFolderModal('${n.id}')">編集</button>
+      <button class="icon-btn" onclick="deleteFolder('${n.id}')">削除</button>
     </div>
    </div>
    <div class="acc-body ${open?'':'hidden'}">
