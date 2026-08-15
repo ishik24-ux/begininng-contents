@@ -1,0 +1,16 @@
+import { signSession, verifyPassword } from './_auth.js';
+
+export default function handler(req, res) {
+  if (req.method !== 'POST') return res.status(405).end();
+  const { email = '', password = '', role = '' } = req.body || {};
+  const isAdmin = role === 'admin' && email.toLowerCase() === process.env.ADMIN_EMAIL?.toLowerCase() && verifyPassword(password, process.env.ADMIN_PASSWORD_HASH || '');
+  const isStudent = role === 'student' && email.toLowerCase() === process.env.STUDENT_EMAIL?.toLowerCase() && verifyPassword(password, process.env.STUDENT_PASSWORD_HASH || '');
+  if (!isAdmin && !isStudent) return res.status(401).json({ error: 'invalid_credentials' });
+  const account = isAdmin
+    ? { role: 'admin', name: 'サイト管理者', email: process.env.ADMIN_EMAIL }
+    : { role: 'student', name: '講座生', email: process.env.STUDENT_EMAIL };
+  const token = signSession({ ...account, exp: Date.now() + 8 * 60 * 60 * 1000 });
+  res.setHeader('Set-Cookie', `begininng_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800`);
+  return res.status(200).json(account);
+}
+
