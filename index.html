@@ -1367,14 +1367,7 @@ function noticesPage(){
 
 function openFolderModal(defaultLevel=1,defaultParent=''){
  adminModalTitle.textContent='階層を追加';
- const parentOptions=[
-   'Beginningに入ったら最初に見る動画',
-   'AI活用教材動画',
-   '1｜Beginningでやっていくことの全体像',
-   '2｜幸せの土台',
-   '4｜ビジネスで結果が出る人のマインドと習慣',
-   'マインド編','実践編','セッティング編'
- ];
+ initDragTree();
  adminModalBody.innerHTML=`<div class="inline-form">
   <label>追加する階層</label>
   <select id="folderLevel" onchange="updateParentVisibility()">
@@ -1390,9 +1383,9 @@ function openFolderModal(defaultLevel=1,defaultParent=''){
   <div id="parentField">
     <label>親階層</label>
     <select id="folderParent">
-      ${parentOptions.map(p=>`<option ${p===defaultParent?'selected':''}>${p}</option>`).join('')}
+      ${folderOptions(defaultParent)}
     </select>
-    <p class="form-note">第1階層を選択した場合、親階層はありません。</p>
+    <p class="form-note">現在登録されている階層を表示しています。第1階層を選択した場合、親階層はありません。</p>
   </div>
 
   <button class="btn" style="width:100%;margin-top:16px" onclick="saveFolder()">追加する</button>
@@ -1409,14 +1402,10 @@ function saveFolder(){
  const name=document.getElementById('folderName').value.trim();
  const level=Number(document.getElementById('folderLevel').value);
  if(!name)return alert('階層名を入力してください');
- const parent=level===1?'':document.getElementById('folderParent').value;
- state.customFolders.push({name,parent,level});
  initDragTree();
- let parentId=null;
- if(level>1){
-   const parentNode=state.dragTree.find(n=>n.type==='folder' && n.title===parent);
-   parentId=parentNode?parentNode.id:null;
- }
+ const parentId=level===1?null:document.getElementById('folderParent').value;
+ const parentNode=parentId?getNode(parentId):null;
+ state.customFolders.push({name,parent:parentNode?.title||'',parentId,level});
  const id='custom-'+Date.now();
  state.dragTree.push({id,type:'folder',title:name,parent:level===1?null:parentId,order:getChildren(level===1?null:parentId).length+1});
  invalidateTreeIndex();
