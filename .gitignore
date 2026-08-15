@@ -1,0 +1,5 @@
+.vercel
+.env*
+auth-secrets.json
+node_modules
+
