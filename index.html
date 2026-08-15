@@ -1014,6 +1014,38 @@ function selectStructureNode(level,name,path){
  state.selectedStructureNode={level,name,path};render();
 }
 
+function folderOptions(selected=''){
+ initDragTree();
+ return state.dragTree.filter(n=>n.type==='folder').map(n=>{
+  const path=buildPath(n.id);
+  const isSelected=selected===n.id||selected===n.title||selected===path;
+  return `<option value="${n.id}" ${isSelected?'selected':''}>${path}</option>`;
+ }).join('');
+}
+
+function deleteVideo(key){
+ let title='';
+ if(String(key).startsWith('added-')){
+  const i=Number(String(key).split('-')[1]);
+  title=state.addedVideos[i]?.title||'';
+ }else{
+  title=videos.find(v=>v.id===Number(key))?.title||'';
+ }
+ if(!title||!confirm(`「${title}」を削除しますか？`))return;
+ snapshotTree();
+ if(String(key).startsWith('added-')){
+  const i=Number(String(key).split('-')[1]);
+  state.addedVideos.splice(i,1);
+  state.dragTree=state.dragTree.filter(n=>!(n.type==='video'&&n.title===title));
+ }else{
+  const id=Number(key);
+  const i=videos.findIndex(v=>v.id===id);
+  if(i>=0)videos.splice(i,1);
+  state.dragTree=state.dragTree.filter(n=>n.videoId!==id);
+ }
+ render();
+}
+
 function videoManage(){
  const all=[
    ...videos.map(v=>({id:v.id,title:v.title,folder:v.folder,isAdded:false})),
@@ -1058,6 +1090,7 @@ function videoManage(){
          : `<button class="visibility-btn ${publicState?'public':'private'}" onclick="toggleVideoVisibility(${v.id})">${publicState?'非公開にする':'公開する'}</button>`
        }
        <button class="btn ghost" onclick="openVideoEditModal('${v.isAdded?'added-'+v.index:v.id}')">編集</button>
+       <button class="btn ghost" onclick="deleteVideo('${v.isAdded?'added-'+v.index:v.id}')">削除</button>
       </div>
     </div>`;
    }).join('')}
@@ -1070,29 +1103,40 @@ function openVideoEditModal(key){
   const i=Number(String(key).split('-')[1]);
   v=state.addedVideos[i];
  }else{
-  v=videos.find(x=>x.id===Number(key));
+ v=videos.find(x=>x.id===Number(key));
  }
  adminModalTitle.textContent='動画を編集';
  adminModalBody.innerHTML=`<div class="inline-form">
-  <label>動画タイトル</label><input value="${(v.title||'').replace(/"/g,'&quot;')}">
-  <label>動画URL</label><input value="${v.url||''}" placeholder="YouTube限定公開URLなど">
-  <label>動画概要</label><textarea rows="4">${v.summary||v.desc||''}</textarea>
+  <label>動画タイトル <span style="color:var(--green)">必須</span></label><input id="editVideoTitle" value="${(v.title||'').replace(/"/g,'&quot;')}">
+  <label>動画URL <span style="color:var(--green)">必須</span></label><input id="editVideoUrl" value="${v.url||''}" placeholder="YouTube限定公開URLなど">
+  <label>動画概要 <span class="muted">（任意）</span></label><textarea id="editVideoSummary" rows="4">${v.summary||v.desc||''}</textarea>
   <label>この動画で学ぶこと</label><textarea id="editVideoHeadline" rows="4" placeholder="この動画で押さえたいポイントや、実践につながる内容を入力">${v.headline||''}</textarea>
-  <label>資料URL</label><input value="${v.resourceUrl||''}" placeholder="資料URL">
-  <label>公開状態</label><select><option>公開</option><option>非公開</option></select>
-  <button class="btn" style="width:100%;margin-top:16px" onclick="saveVideoHeadline('${key}')">保存</button>
+  <label>資料URL</label><input id="editVideoResource" value="${v.resourceUrl||''}" placeholder="資料URL">
+  <label>配置先階層</label><select id="editVideoParent">${folderOptions(v.parentId||v.parent||v.folder||'')}</select>
+  <label>公開状態</label><select id="editVideoVisibility"><option ${v.visibility==='非公開'?'':'selected'}>公開</option><option ${v.visibility==='非公開'?'selected':''}>非公開</option></select>
+  <button class="btn" style="width:100%;margin-top:16px" onclick="saveVideoEdit('${key}')">保存</button>
  </div>`;
  adminModal.classList.remove('hidden');
 }
-function saveVideoHeadline(key){
+function saveVideoEdit(key){
+ const title=document.getElementById('editVideoTitle').value.trim();
+ const url=document.getElementById('editVideoUrl').value.trim();
+ if(!title||!url)return alert('動画タイトル・動画URLは必須です');
  const headline=document.getElementById('editVideoHeadline').value.trim();
+ const parentId=document.getElementById('editVideoParent').value;
+ const parentNode=getNode(parentId);
+ let target;
  if(String(key).startsWith('added-')){
   const i=Number(String(key).split('-')[1]);
-  state.addedVideos[i].headline=headline;
+  target=state.addedVideos[i];
  }else{
-  const v=videos.find(x=>x.id===Number(key));
-  if(v)v.headline=headline;
+  target=videos.find(x=>x.id===Number(key));
  }
+ if(!target)return;
+ const oldTitle=target.title;
+ Object.assign(target,{title,url,headline,summary:document.getElementById('editVideoSummary').value.trim(),resourceUrl:document.getElementById('editVideoResource').value.trim(),parentId,parent:parentNode?.title||'',folder:parentNode?.title||'',visibility:document.getElementById('editVideoVisibility').value});
+ const treeVideo=state.dragTree.find(n=>n.type==='video'&&(n.videoId===Number(key)||n.title===oldTitle));
+ if(treeVideo){treeVideo.title=title;treeVideo.parent=parentId;treeVideo.order=getChildren(parentId).filter(n=>n.id!==treeVideo.id).length+1}
  closeAdminModal();render();
 }
 function studentsPage(){
@@ -1353,11 +1397,11 @@ function openVideoModal(defaultParent=''){
  adminModalBody.innerHTML=`<div class="inline-form">
   <label>動画タイトル <span style="color:var(--green)">必須</span></label><input id="videoTitle" placeholder="動画タイトル">
   <label>動画URL <span style="color:var(--green)">必須</span></label><input id="videoUrl" placeholder="YouTube限定公開URLなど">
-  <label>動画概要 <span style="color:var(--green)">必須</span></label><textarea id="videoSummary" rows="4" placeholder="動画の概要テキスト"></textarea>
+  <label>動画概要 <span class="muted">（任意）</span></label><textarea id="videoSummary" rows="4" placeholder="動画の概要テキスト"></textarea>
   <label>この動画で学ぶこと</label><textarea id="videoHeadline" rows="4" placeholder="この動画で押さえたいポイントや、実践につながる内容を入力"></textarea>
   <label>資料URL</label><input id="resourceUrl" placeholder="Googleドライブ等の資料URL">
   <label>PDF資料</label><input id="resourcePdf" type="file" accept=".pdf">
-  <label>配置先階層</label><select id="videoParent">${['Beginningに入ったら最初に見る動画','AI活用教材動画','1｜Beginningでやっていくことの全体像','2｜幸せの土台','マインド編','実践編','セッティング編','AIを使って自己理解を深める方法','AI活用法'].map(p=>`<option ${p===defaultParent?'selected':''}>${p}</option>`).join('')}</select>
+  <label>配置先階層</label><select id="videoParent">${folderOptions(defaultParent)}</select>
   <label>公開状態</label><select id="videoVisibility"><option>公開</option><option>非公開</option></select>
   <button class="btn" style="width:100%;margin-top:16px" onclick="saveAdminVideo()">動画を追加</button>
  </div>`;
@@ -1367,19 +1411,20 @@ function saveAdminVideo(){
  const title=document.getElementById('videoTitle').value.trim();
  const url=document.getElementById('videoUrl').value.trim();
  const summary=document.getElementById('videoSummary').value.trim();
- if(!title||!url||!summary)return alert('動画タイトル・動画URL・動画概要は必須です');
- const parentTitle=document.getElementById('videoParent').value;
+ if(!title||!url)return alert('動画タイトル・動画URLは必須です');
+ const parentId=document.getElementById('videoParent').value;
+ const parentNode=getNode(parentId);
+ const parentTitle=parentNode?.title||'';
  state.addedVideos.push({
-  title,url,summary,parent:parentTitle,
+  title,url,summary,parent:parentTitle,parentId,
   headline:document.getElementById('videoHeadline').value.trim(),
   resourceUrl:document.getElementById('resourceUrl').value.trim(),
   pdf:document.getElementById('resourcePdf').files[0]?.name||'',
   visibility:document.getElementById('videoVisibility').value
  });
  initDragTree();
- const parentNode=state.dragTree.find(n=>n.type==='folder' && n.title===parentTitle);
  const id='added-video-'+Date.now();
- state.dragTree.push({id,type:'video',title,parent:parentNode?parentNode.id:null,order:getChildren(parentNode?parentNode.id:null).length+1});
+ state.dragTree.push({id,type:'video',title,parent:parentId||null,order:getChildren(parentId||null).length+1});
  closeAdminModal();render();
 }
 function removeAddedVideo(i){state.addedVideos.splice(i,1);render()}
