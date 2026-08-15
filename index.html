@@ -620,11 +620,26 @@ function initDragTree(){
   {id:'ai-3',type:'folder',title:'AI活用法',parent:'cat-ai',order:3}
  ];
 }
-function getChildren(parentId){
+let treeIndex=null;
+function invalidateTreeIndex(){treeIndex=null}
+function getTreeIndex(){
  initDragTree();
- return state.dragTree.filter(n=>n.parent===parentId).sort((a,b)=>a.order-b.order);
+ if(treeIndex)return treeIndex;
+ const nodes=new Map(),children=new Map();
+ state.dragTree.forEach(n=>{
+  nodes.set(n.id,n);
+  const parent=n.parent??null;
+  if(!children.has(parent))children.set(parent,[]);
+  children.get(parent).push(n);
+ });
+ children.forEach(list=>list.sort((a,b)=>a.order-b.order));
+ treeIndex={nodes,children};
+ return treeIndex;
 }
-function getNode(id){initDragTree();return state.dragTree.find(n=>n.id===id)}
+function getChildren(parentId){
+ return getTreeIndex().children.get(parentId??null)||[];
+}
+function getNode(id){return getTreeIndex().nodes.get(id)}
 function getDepth(id){
  let d=1,n=getNode(id);
  while(n && n.parent){d++; n=getNode(n.parent)}
@@ -647,6 +662,7 @@ function snapshotTree(){
 function undoTree(){
  if(!state.dragSnapshot)return;
  state.dragTree = JSON.parse(state.dragSnapshot);
+ invalidateTreeIndex();
  state.dragSnapshot = null;
  render();
 }
@@ -676,11 +692,13 @@ function dropBefore(ev,targetId){
  if(!dragged||!target)return;
  const oldParent=dragged.parent;
  dragged.parent=target.parent;
+ invalidateTreeIndex();
  const siblings=getChildren(target.parent).filter(n=>n.id!==draggedId);
  const idx=siblings.findIndex(n=>n.id===targetId);
  siblings.splice(idx,0,dragged);
  siblings.forEach((n,i)=>n.order=i+1);
  normalizeOrders(oldParent);
+ invalidateTreeIndex();
  state.selectedStructureNode={level:dragged.type==='video'?'video':getDepth(dragged.id),name:dragged.title,path:buildPath(dragged.id)};
  render();
 }
@@ -699,8 +717,10 @@ function dropInside(ev,targetId){
  if(!dragged||!target||target.type==='video'||draggedId===targetId||isDescendant(targetId,draggedId))return;
  const oldParent=dragged.parent;
  dragged.parent=targetId;
+ invalidateTreeIndex();
  dragged.order=getChildren(targetId).filter(n=>n.id!==draggedId).length+1;
  normalizeOrders(oldParent); normalizeOrders(targetId);
+ invalidateTreeIndex();
  state.selectedStructureNode={level:dragged.type==='video'?'video':getDepth(dragged.id),name:dragged.title,path:buildPath(dragged.id)};
  render();
 }
@@ -714,6 +734,7 @@ function addDragFolder(level,parentId,name){
  const id='custom-'+Date.now();
  const parent = level===1 ? null : parentId;
  state.dragTree.push({id,type:'folder',title:name,parent,order:getChildren(parent).length+1});
+ invalidateTreeIndex();
  state.selectedStructureNode={level,name,path:buildPath(id)};
  render();
 }
@@ -767,6 +788,7 @@ function deleteFolder(id){
  const removeIds=new Set([id,...descendants]);
  const removedTitles=new Set(state.dragTree.filter(item=>removeIds.has(item.id)).map(item=>item.title));
  state.dragTree=state.dragTree.filter(item=>!removeIds.has(item.id));
+ invalidateTreeIndex();
  state.customFolders=state.customFolders.filter(f=>!removedTitles.has(f.name));
  state.addedVideos=state.addedVideos.filter(v=>!removedTitles.has(v.title));
  normalizeOrders(oldParent);
@@ -889,6 +911,8 @@ function renderAccordionNode(n){
 }
 function structurePage(){
  initDragTree();
+ invalidateTreeIndex();
+ getTreeIndex();
  const s=structureStats();
  return `<div>
   <div class="admin-kicker">COURSE STRUCTURE</div>
@@ -938,8 +962,10 @@ function dropAtEnd(ev,parentId){
  if(!dragged||draggedId===parentId||isDescendant(parentId,draggedId))return;
  const oldParent=dragged.parent;
  dragged.parent=parentId;
+ invalidateTreeIndex();
  dragged.order=getChildren(parentId).filter(n=>n.id!==draggedId).length+1;
  normalizeOrders(oldParent);normalizeOrders(parentId);
+ invalidateTreeIndex();
  state.selectedStructureNode={level:dragged.type==='video'?'video':getDepth(dragged.id),name:dragged.title,path:buildPath(dragged.id)};
  render();
 }
@@ -1040,9 +1066,10 @@ function deleteVideo(key){
  }else{
   const id=Number(key);
   const i=videos.findIndex(v=>v.id===id);
-  if(i>=0)videos.splice(i,1);
+ if(i>=0)videos.splice(i,1);
   state.dragTree=state.dragTree.filter(n=>n.videoId!==id);
  }
+ invalidateTreeIndex();
  render();
 }
 
@@ -1136,7 +1163,12 @@ function saveVideoEdit(key){
  const oldTitle=target.title;
  Object.assign(target,{title,url,headline,summary:document.getElementById('editVideoSummary').value.trim(),resourceUrl:document.getElementById('editVideoResource').value.trim(),parentId,parent:parentNode?.title||'',folder:parentNode?.title||'',visibility:document.getElementById('editVideoVisibility').value});
  const treeVideo=state.dragTree.find(n=>n.type==='video'&&(n.videoId===Number(key)||n.title===oldTitle));
- if(treeVideo){treeVideo.title=title;treeVideo.parent=parentId;treeVideo.order=getChildren(parentId).filter(n=>n.id!==treeVideo.id).length+1}
+ if(treeVideo){
+  treeVideo.title=title;treeVideo.parent=parentId;
+  invalidateTreeIndex();
+  treeVideo.order=getChildren(parentId).filter(n=>n.id!==treeVideo.id).length+1;
+  invalidateTreeIndex();
+ }
  closeAdminModal();render();
 }
 function studentsPage(){
@@ -1387,6 +1419,7 @@ function saveFolder(){
  }
  const id='custom-'+Date.now();
  state.dragTree.push({id,type:'folder',title:name,parent:level===1?null:parentId,order:getChildren(level===1?null:parentId).length+1});
+ invalidateTreeIndex();
  state.selectedStructureNode={level,name,path:buildPath(id)};
  closeAdminModal();render();
 }
@@ -1425,6 +1458,7 @@ function saveAdminVideo(){
  initDragTree();
  const id='added-video-'+Date.now();
  state.dragTree.push({id,type:'video',title,parent:parentId||null,order:getChildren(parentId||null).length+1});
+ invalidateTreeIndex();
  closeAdminModal();render();
 }
 function removeAddedVideo(i){state.addedVideos.splice(i,1);render()}
