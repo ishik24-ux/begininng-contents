@@ -466,7 +466,7 @@ function collectCategoryVideoIds(category){
 }
 
 function loginRoleFromPath(){
- return location.pathname.replace(/\\/+$/,'')==='/admin/login'?'admin':'student';
+ return location.pathname.startsWith('/admin/')?'admin':'student';
 }
 
 const state={
