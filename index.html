@@ -500,6 +500,22 @@ const state={
  }
 };
 function persist(){localStorage.setItem('beginning-role',state.role);localStorage.setItem('beginning-status',JSON.stringify(state.videoStatus));localStorage.setItem('beginning-playback',JSON.stringify(state.playback));localStorage.setItem('beginning-favorites',JSON.stringify(state.favorites));localStorage.setItem('beginning-ratings',JSON.stringify(state.ratings));localStorage.setItem('beginning-comments',JSON.stringify(state.comments));localStorage.setItem('beginning-memo',JSON.stringify(state.memo))}
+let adminSaveTimer=null,adminDataLoaded=false;
+function adminDataSnapshot(){initDragTree();return {dragTree:state.dragTree,customFolders:state.customFolders,addedVideos:state.addedVideos,videoVisibility:state.videoVisibility,inviteUrl:state.inviteUrl,videos}}
+function applyAdminData(data){if(!data)return;state.dragTree=data.dragTree||state.dragTree;state.customFolders=data.customFolders||[];state.addedVideos=data.addedVideos||[];state.videoVisibility=data.videoVisibility||{};state.inviteUrl=data.inviteUrl||'';if(Array.isArray(data.videos)){videos.splice(0,videos.length,...data.videos)}invalidateTreeIndex()}
+function saveAdminDataSoon(){
+ if(!adminDataLoaded||!state.isAuthenticated||state.role!=='admin')return;
+ const data=adminDataSnapshot();localStorage.setItem('begininng-admin-backup',JSON.stringify(data));
+ clearTimeout(adminSaveTimer);adminSaveTimer=setTimeout(()=>fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data})}).catch(()=>{}),450);
+}
+async function loadAdminData(){
+ const response=await fetch('/api/content');if(!response.ok)throw new Error('load_failed');
+ const {data}=await response.json();
+ if(data)applyAdminData(data);else{const backup=localStorage.getItem('begininng-admin-backup');if(backup)applyAdminData(JSON.parse(backup))}
+ adminDataLoaded=true;
+ if(!data)await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:adminDataSnapshot()})});
+ const apps=await fetch('/api/invite?action=applications');if(apps.ok)state.applications=(await apps.json()).applications;
+}
 function status(id){return state.videoStatus[id]||'todo'}
 function statusLabel(id){return status(id)==='done'?'視聴完了':status(id)==='watching'?'視聴中':'未視聴'}
 function allIds(node){let a=[...(node.videos||[])];(node.children||[]).forEach(c=>a=a.concat(allIds(c)));return a}
@@ -522,6 +538,7 @@ async function performLogin(){
  state.role=state.loginRole;
  state.page=state.role==='admin'?'adminHome':'home';
  state.currentUserName=account.name||(state.role==='admin'?'管理者':'講座生');
+ if(state.role==='admin')await loadAdminData();
  render();
 }
 async function logout(){stopTimer();await fetch('/api/logout',{method:'POST'});state.isAuthenticated=false;render()}
@@ -532,7 +549,7 @@ function render(){
  mobileNav.classList.toggle('hidden',!state.isAuthenticated);
  if(!state.isAuthenticated){setLoginRole(state.loginRole);return}
  currentUser.textContent=state.currentUserName||(state.role==='admin'?'デモ 管理者':'山田 花子');
- renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='video'?videoPage():`<div class="card"><h2>マイページ</h2><p class="muted">プロフィール設定のデモ画面です。</p></div>`}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='preview'?previewPage():noticesPage()}
+ renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='video'?videoPage():`<div class="card"><h2>マイページ</h2><p class="muted">プロフィール設定のデモ画面です。</p></div>`}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='preview'?previewPage():noticesPage();saveAdminDataSoon()}
 }
 function homePage(){const done=Object.values(state.videoStatus).filter(x=>x==='done').length;return `<h1>ホーム</h1><p class="muted">今日も少しずつ学びを進めましょう。</p><div class="card notice" style="margin-top:18px"><h2>お知らせ</h2><b>Beginningサイト更新のお知らせ</b><p class="muted">新しい動画と資料を追加しました。動画一覧から確認できます。</p></div><div class="grid stats" style="margin-top:18px"><div class="card stat">視聴完了<b>${done}本</b></div><div class="card stat">視聴中<b>${Object.values(state.videoStatus).filter(x=>x==='watching').length}本</b></div><div class="card stat">お気に入り<b>${state.favorites.length}本</b></div></div><div class="card" style="margin-top:18px"><h2>前回の続きから</h2><b>${videos[0].title}</b><p class="muted">${Math.round(state.playback[1]||0)}%まで視聴</p><button class="btn" onclick="openVideo(1)">続きを見る</button></div><div class="section-title"><h2>NEW動画</h2></div><div class="video-grid">${videos.filter(v=>v.new).slice(0,3).map(videoCard).join('')}</div>`}
 function videoCard(v){const fav=state.favorites.includes(v.id);return `<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><div style="display:flex;justify-content:space-between"><span class="badge">NEW</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div><h3 style="margin-top:8px">${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`}
@@ -1470,8 +1487,10 @@ function saveAdminVideo(){
 }
 function removeAddedVideo(i){state.addedVideos.splice(i,1);render()}
 
-function generateInvite(){
- state.inviteUrl='https://beginning.example/invite/'+Math.random().toString(36).slice(2,10);
+async function generateInvite(){
+ const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'generate'})});
+ if(!response.ok)return alert('招待URLを発行できませんでした');
+ state.inviteUrl=(await response.json()).url;
  state.learnerInviteUsed=false;
  render();
 }
@@ -1481,7 +1500,7 @@ function copyInvite(){
  alert('招待URLをコピーしました');
 }
 function openInviteRegistration(){
- if(!state.inviteUrl)state.inviteUrl='https://beginning.example/invite/demo1234';
+ if(!state.inviteUrl)return alert('先に招待URLを発行してください');
  if(state.learnerInviteUsed){
   adminModalTitle.textContent='招待URL';
   adminModalBody.innerHTML=`<div class="auth-card"><div class="invite-state used">使用済み</div><h2 style="margin-top:12px">この招待URLは使用済みです</h2><p class="muted">一度登録に使用された招待URLは再利用できません。管理者に新しいURLを発行してもらってください。</p></div>`;
@@ -1506,11 +1525,8 @@ function submitApplication(){
  state.learnerInviteUsed=true;
  closeAdminModal();render();
 }
-function approveApplication(i){
- const a=state.applications.splice(i,1)[0];
- state.learners.push({name:a.name,email:a.email,status:'active',completed:0,last:'未視聴'});render();
-}
-function rejectApplication(i){state.applications.splice(i,1);render()}
+async function approveApplication(i){const a=state.applications[i];await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'approve',id:a.id})});a.status='active';state.learners.push({name:a.name,email:a.email,status:'active',completed:0,last:'未視聴'});render()}
+async function rejectApplication(i){const a=state.applications[i];await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'reject',id:a.id})});state.applications.splice(i,1);render()}
 function disableLearner(i){state.learners[i].status='disabled';render()}
 function enableLearner(i){state.learners[i].status='active';render()}
 function closeAdminModal(){adminModal.classList.add('hidden')}
@@ -1519,12 +1535,17 @@ async function restoreSession(){
   const response=await fetch('/api/session');
   if(response.ok){
    const account=await response.json();
-   if(account.role===state.loginRole){state.isAuthenticated=true;state.role=account.role;state.currentUserName=account.name;state.page=account.role==='admin'?'adminHome':'home'}
+   if(account.role===state.loginRole){state.isAuthenticated=true;state.role=account.role;state.currentUserName=account.name;state.page=account.role==='admin'?'adminHome':'home';if(account.role==='admin')await loadAdminData()}
   }
  }catch(e){}
  render();
 }
-restoreSession();
+function renderInviteLanding(token){
+ document.body.innerHTML=`<main style="max-width:520px;margin:8vh auto;padding:20px"><div class="card"><div class="brand">Begininng 教材サイト</div><h1 style="margin-top:18px">講座生の参加申請</h1><p class="muted">お名前・メールアドレス・パスワードを登録してください。管理者承認後にログインできます。</p><div class="inline-form"><label>名前</label><input id="inviteName"><label>メールアドレス</label><input id="inviteEmail" type="email"><label>パスワード（8文字以上）</label><input id="invitePassword" type="password"><button class="btn" style="width:100%;margin-top:18px" onclick="submitInviteRegistration('${token}')">登録して参加申請</button><p id="inviteMessage" class="muted"></p></div></div></main>`;
+}
+async function submitInviteRegistration(token){const name=inviteName.value.trim(),email=inviteEmail.value.trim(),password=invitePassword.value;const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'register',token,name,email,password})});inviteMessage.textContent=response.ok?'参加申請を受け付けました。管理者の承認をお待ちください。':'招待URLが無効か、入力内容に不足があります。';if(response.ok)document.querySelector('button').disabled=true}
+const inviteToken=location.pathname.match(/^\/invite\/([^/]+)/)?.[1];
+if(inviteToken)renderInviteLanding(inviteToken);else restoreSession();
 </script>
 
 <div class="modal hidden" id="adminModal">
