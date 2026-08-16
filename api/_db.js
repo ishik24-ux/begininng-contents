@@ -11,5 +11,13 @@ export async function ensureSchema() {
   await sql`CREATE TABLE IF NOT EXISTS app_content (id text PRIMARY KEY, data jsonb NOT NULL, updated_at timestamptz NOT NULL DEFAULT now())`;
   await sql`CREATE TABLE IF NOT EXISTS invites (token text PRIMARY KEY, used boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now())`;
   await sql`CREATE TABLE IF NOT EXISTS applications (id bigserial PRIMARY KEY, name text NOT NULL, email text NOT NULL, password_hash text NOT NULL, status text NOT NULL DEFAULT 'pending', created_at timestamptz NOT NULL DEFAULT now())`;
+  await sql`CREATE TABLE IF NOT EXISTS app_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`;
+  const migration=await sql`SELECT id FROM app_migrations WHERE id='cleanup_20260816_empty_site_v1'`;
+  if(!migration.length){
+    await sql`DELETE FROM app_content`;
+    await sql`DELETE FROM applications`;
+    await sql`DELETE FROM invites`;
+    await sql`INSERT INTO app_migrations (id) VALUES ('cleanup_20260816_empty_site_v1') ON CONFLICT DO NOTHING`;
+  }
 }
 
