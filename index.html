@@ -1540,7 +1540,6 @@ function enableLearner(i){state.learners[i].status='active';render()}
 function closeAdminModal(){adminModal.classList.add('hidden')}
 async function restoreSession(){
  try{
-  await fetch('/api/invite?token=cleanup-init');
   const response=await fetch('/api/session');
   if(response.ok){
    const account=await response.json();
@@ -1554,7 +1553,7 @@ function renderInviteLanding(token){
 }
 async function submitInviteRegistration(token){const name=inviteName.value.trim(),email=inviteEmail.value.trim(),password=invitePassword.value;const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'register',token,name,email,password})});inviteMessage.textContent=response.ok?'参加申請を受け付けました。管理者の承認をお待ちください。':'招待URLが無効か、入力内容に不足があります。';if(response.ok)document.querySelector('button').disabled=true}
 const inviteToken=location.pathname.match(/^\/invite\/([^/]+)/)?.[1];
-if(inviteToken)renderInviteLanding(inviteToken);else restoreSession();
+if(inviteToken)renderInviteLanding(inviteToken);else{setLoginRole(loginRoleFromPath());restoreSession()}
 </script>
 
 <div class="modal hidden" id="adminModal">
