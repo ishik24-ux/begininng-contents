@@ -656,6 +656,22 @@ function isDescendant(candidateId,ancestorId){
 function normalizeOrders(parentId){
  getChildren(parentId).forEach((n,i)=>n.order=i+1);
 }
+function moveStructureNode(id,direction){
+ const node=getNode(id);
+ if(!node)return;
+ const siblings=[...getChildren(node.parent)];
+ const index=siblings.findIndex(n=>n.id===id);
+ const nextIndex=index+direction;
+ if(index<0||nextIndex<0||nextIndex>=siblings.length)return;
+ snapshotTree();
+ const other=siblings[nextIndex];
+ const currentOrder=node.order;
+ node.order=other.order;
+ other.order=currentOrder;
+ invalidateTreeIndex();
+ state.selectedStructureNode={level:node.type==='video'?'video':getDepth(node.id),name:node.title,path:buildPath(node.id)};
+ render();
+}
 function snapshotTree(){
  state.dragSnapshot = JSON.stringify(state.dragTree);
 }
@@ -876,7 +892,7 @@ function renderAccordionNode(n){
       onclick="selectStructureNode('video','${n.title.replace(/'/g,"\\'")}','${buildPath(n.id).replace(/'/g,"\\'")}')">
       <span class="play">▶</span>
       <div><div class="acc-title">${n.title}</div><div class="acc-meta">動画</div></div>
-      <div class="acc-actions"><span class="drag-handle" title="ドラッグして移動">⠿</span><button class="icon-btn" onclick="event.stopPropagation();go('videoManage')">動画管理</button></div>
+      <div class="acc-actions"><span class="drag-handle" title="ドラッグして移動">⠿</span><button class="icon-btn" title="上へ移動" onclick="event.stopPropagation();moveStructureNode('${n.id}',-1)">↑</button><button class="icon-btn" title="下へ移動" onclick="event.stopPropagation();moveStructureNode('${n.id}',1)">↓</button><button class="icon-btn" onclick="event.stopPropagation();go('videoManage')">動画管理</button></div>
     </div>
    </div>`;
  }
@@ -898,6 +914,8 @@ function renderAccordionNode(n){
     </div>
     <div class="acc-actions" onclick="event.stopPropagation()">
       <span class="drag-handle" title="ドラッグして移動">⠿</span>
+      <button class="icon-btn" title="上へ移動" onclick="moveStructureNode('${n.id}',-1)">↑</button>
+      <button class="icon-btn" title="下へ移動" onclick="moveStructureNode('${n.id}',1)">↓</button>
       <button class="icon-btn primary" onclick="openFolderModal(${Math.min(depth+1,4)},'${n.title.replace(/'/g,"\\'")}')">＋子階層</button>
       <button class="icon-btn" onclick="openVideoModal('${n.title.replace(/'/g,"\\'")}')">＋動画</button>
       <button class="icon-btn" onclick="openEditFolderModal('${n.id}')">編集</button>
@@ -905,7 +923,7 @@ function renderAccordionNode(n){
     </div>
    </div>
    <div class="acc-body ${open?'':'hidden'}">
-     ${renderAccordionTree(n.id)}
+     ${open?renderAccordionTree(n.id):''}
    </div>
  </div>`;
 }
