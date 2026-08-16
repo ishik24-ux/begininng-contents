@@ -465,9 +465,13 @@ function collectCategoryVideoIds(category){
   return ids;
 }
 
+function loginRoleFromPath(){
+ return location.pathname.replace(/\\/+$/,'')==='/admin/login'?'admin':'student';
+}
+
 const state={
  isAuthenticated:false,
- loginRole:location.pathname.startsWith('/admin')?'admin':'student',
+ loginRole:loginRoleFromPath(),
  currentUserName:'',
  role:localStorage.getItem('beginning-role')||'student',
  page:'home',selectedVideo:null,
@@ -549,7 +553,7 @@ function render(){
  topbar.classList.toggle('hidden',!state.isAuthenticated);
  appLayout.classList.toggle('hidden',!state.isAuthenticated);
  mobileNav.classList.toggle('hidden',!state.isAuthenticated);
- if(!state.isAuthenticated){setLoginRole(state.loginRole);return}
+ if(!state.isAuthenticated){setLoginRole(loginRoleFromPath());return}
  currentUser.textContent=state.currentUserName||(state.role==='admin'?'デモ 管理者':'山田 花子');
  renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='video'?videoPage():`<div class="card"><h2>マイページ</h2><p class="muted">プロフィール設定のデモ画面です。</p></div>`}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='preview'?previewPage():noticesPage();saveAdminDataSoon()}
 }
