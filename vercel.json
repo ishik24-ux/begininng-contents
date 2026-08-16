@@ -1,7 +1,8 @@
 {
   "rewrites": [
     { "source": "/login", "destination": "/index.html" },
-    { "source": "/admin/login", "destination": "/index.html" }
+    { "source": "/admin/login", "destination": "/index.html" },
+    { "source": "/invite/(.*)", "destination": "/index.html" }
   ],
   "headers": [
     {
