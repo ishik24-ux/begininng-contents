@@ -501,7 +501,7 @@ const state={
 };
 function persist(){localStorage.setItem('beginning-role',state.role);localStorage.setItem('beginning-status',JSON.stringify(state.videoStatus));localStorage.setItem('beginning-playback',JSON.stringify(state.playback));localStorage.setItem('beginning-favorites',JSON.stringify(state.favorites));localStorage.setItem('beginning-ratings',JSON.stringify(state.ratings));localStorage.setItem('beginning-comments',JSON.stringify(state.comments));localStorage.setItem('beginning-memo',JSON.stringify(state.memo))}
 let adminSaveTimer=null,adminDataLoaded=false;
-function adminDataSnapshot(){initDragTree();return {dragTree:state.dragTree,customFolders:state.customFolders,addedVideos:state.addedVideos,videoVisibility:state.videoVisibility,inviteUrl:state.inviteUrl,videos}}
+function adminDataSnapshot(){initDragTree();return {savedAt:Date.now(),dragTree:state.dragTree,customFolders:state.customFolders,addedVideos:state.addedVideos,videoVisibility:state.videoVisibility,inviteUrl:state.inviteUrl,videos}}
 function applyAdminData(data){if(!data)return;state.dragTree=data.dragTree||state.dragTree;state.customFolders=data.customFolders||[];state.addedVideos=data.addedVideos||[];state.videoVisibility=data.videoVisibility||{};state.inviteUrl=data.inviteUrl||'';if(Array.isArray(data.videos)){videos.splice(0,videos.length,...data.videos)}invalidateTreeIndex()}
 function saveAdminDataSoon(){
  if(!adminDataLoaded||!state.isAuthenticated||state.role!=='admin')return;
@@ -510,10 +510,10 @@ function saveAdminDataSoon(){
 }
 async function loadAdminData(){
  const response=await fetch('/api/content');if(!response.ok)throw new Error('load_failed');
- const {data}=await response.json();
- if(data)applyAdminData(data);else{const backup=localStorage.getItem('begininng-admin-backup');if(backup)applyAdminData(JSON.parse(backup))}
+ const {data}=await response.json();const backupText=localStorage.getItem('begininng-admin-backup');const backup=backupText?JSON.parse(backupText):null;const newest=backup&&(!data||backup.savedAt>(data.savedAt||0))?backup:data;
+ if(newest)applyAdminData(newest);
  adminDataLoaded=true;
- if(!data)await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:adminDataSnapshot()})});
+ if(!data||newest===backup)await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:newest||adminDataSnapshot()})});
  const apps=await fetch('/api/invite?action=applications');if(apps.ok)state.applications=(await apps.json()).applications;
 }
 function status(id){return state.videoStatus[id]||'todo'}
