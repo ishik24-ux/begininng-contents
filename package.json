@@ -1,6 +1,9 @@
 {
   "name": "begininng-contents",
   "private": true,
-  "type": "module"
+  "type": "module",
+  "dependencies": {
+    "@neondatabase/serverless": "^1.0.2"
+  }
 }
 
