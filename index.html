@@ -443,6 +443,17 @@ const courseCategories = [
   }
 ];
 
+// Production starts empty. Registered content is loaded from the database after login.
+videos.splice(0, videos.length);
+tree.splice(0, tree.length);
+courseCategories.splice(0, courseCategories.length);
+
+const cleanupVersion='2026-08-16-empty-site-v1';
+if(localStorage.getItem('begininng-cleanup-version')!==cleanupVersion){
+ ['beginning-status','beginning-playback','beginning-favorites','beginning-ratings','beginning-comments','beginning-memo','begininng-admin-backup'].forEach(key=>localStorage.removeItem(key));
+ localStorage.setItem('begininng-cleanup-version',cleanupVersion);
+}
+
 function collectNodeVideoIds(node){
   let ids=[...(node.videos||[])];
   (node.children||[]).forEach(child=>ids=ids.concat(collectNodeVideoIds(child)));
@@ -459,35 +470,26 @@ const state={
  loginRole:location.pathname.startsWith('/admin')?'admin':'student',
  currentUserName:'',
  role:localStorage.getItem('beginning-role')||'student',
- page:'home',selectedVideo:1,
- expanded:{'cat-beginning':true,'beginning-0':true,'beginning-3':true,'beginning-3-0':true,'cat-ai':false},
- videoStatus:JSON.parse(localStorage.getItem('beginning-status')||'{"1":"watching","2":"done","11":"done"}'),
- playback:JSON.parse(localStorage.getItem('beginning-playback')||'{"1":46,"2":100,"11":100}'),
- favorites:JSON.parse(localStorage.getItem('beginning-favorites')||'[2,11]'),
- ratings:JSON.parse(localStorage.getItem('beginning-ratings')||'{"2":5}'),
+ page:'home',selectedVideo:null,
+ expanded:{},
+ videoStatus:JSON.parse(localStorage.getItem('beginning-status')||'{}'),
+ playback:JSON.parse(localStorage.getItem('beginning-playback')||'{}'),
+ favorites:JSON.parse(localStorage.getItem('beginning-favorites')||'[]'),
+ ratings:JSON.parse(localStorage.getItem('beginning-ratings')||'{}'),
  comments:JSON.parse(localStorage.getItem('beginning-comments')||'{}'),
  memo:JSON.parse(localStorage.getItem('beginning-memo')||'{}'),
  playerTimer:null,insightOpen:false,
  inviteUrl:'',
- learners:[
-  {name:'山田 花子',email:'hanako@example.com',status:'active',completed:18,last:'今日'},
-  {name:'佐藤 美咲',email:'misaki@example.com',status:'active',completed:12,last:'昨日'},
-  {name:'鈴木 愛',email:'ai@example.com',status:'disabled',completed:31,last:'2日前'}
- ],
- applications:[
-  {name:'田中 美穂',email:'miho@example.com',status:'pending'},
-  {name:'高橋 里奈',email:'rina@example.com',status:'pending'}
- ],
+ learners:[],
+ applications:[],
  customFolders:[],
  addedVideos:[],
  videoVisibility:{},
- selectedStructureNode:{level:1,name:'Beginningに入ったら最初に見る動画',path:'Beginningに入ったら最初に見る動画'},
+ selectedStructureNode:{level:1,name:'',path:''},
  adminInviteUrl:'',
  adminInviteRole:'管理者',
  adminAccounts:[
-  {name:'サイト管理者',email:'nklabo.academy@gmail.com',role:'管理者',status:'active'},
-  {name:'市村 管理者',email:'admin1@example.com',role:'管理者',status:'active'},
-  {name:'仲宗根 編集者',email:'editor@example.com',role:'編集者',status:'active'}
+  {name:'サイト管理者',email:'nklabo.academy@gmail.com',role:'管理者',status:'active'}
  ],
  previewPage:'home',
  previewDevice:'desktop',
@@ -608,6 +610,8 @@ function adminHome(){
 
 function initDragTree(){
  if(state.dragTree) return;
+ state.dragTree = [];
+ return;
  state.dragTree = [
   {id:'cat-beginning',type:'folder',title:'Beginningに入ったら最初に見る動画',parent:null,order:1},
   {id:'b-1',type:'folder',title:'Beginningでやっていくことの全体像',parent:'cat-beginning',order:1},
@@ -1532,6 +1536,7 @@ function enableLearner(i){state.learners[i].status='active';render()}
 function closeAdminModal(){adminModal.classList.add('hidden')}
 async function restoreSession(){
  try{
+  await fetch('/api/invite?token=cleanup-init');
   const response=await fetch('/api/session');
   if(response.ok){
    const account=await response.json();
