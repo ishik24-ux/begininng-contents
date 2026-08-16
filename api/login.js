@@ -11,11 +11,11 @@ export default async function handler(req, res) {
     const rows=await db()`SELECT name,email,password_hash FROM applications WHERE email=${email.toLowerCase()} AND status='active' ORDER BY id DESC LIMIT 1`;
     studentAccount=rows[0]&&verifyPassword(password,rows[0].password_hash)?rows[0]:null;
   }
-  const isStudent = role === 'student' && ((email.toLowerCase() === process.env.STUDENT_EMAIL?.toLowerCase() && verifyPassword(password, process.env.STUDENT_PASSWORD_HASH || '')) || studentAccount);
+  const isStudent = role === 'student' && !!studentAccount;
   if (!isAdmin && !isStudent) return res.status(401).json({ error: 'invalid_credentials' });
   const account = isAdmin
     ? { role: 'admin', name: 'サイト管理者', email: process.env.ADMIN_EMAIL }
-    : { role: 'student', name: studentAccount?.name||'講座生', email: studentAccount?.email||process.env.STUDENT_EMAIL };
+    : { role: 'student', name: studentAccount.name, email: studentAccount.email };
   const token = signSession({ ...account, exp: Date.now() + 8 * 60 * 60 * 1000 });
   res.setHeader('Set-Cookie', `begininng_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800`);
   return res.status(200).json(account);
