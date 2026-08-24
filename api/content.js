@@ -10,12 +10,17 @@ export default async function handler(req, res) {
     const rows = await sql`SELECT data FROM app_content WHERE id='main'`;
     const data=rows[0]?.data || null;
     if(session.role==='student'&&data){
+      const publicBaseVideos=(data.videos||[]).filter(video=>(data.videoVisibility||{})[video.id]!==false);
+      const publicAddedVideos=(data.addedVideos||[]).filter(video=>video.visibility!=='非公開');
+      const publicBaseIds=new Set(publicBaseVideos.map(video=>video.id));
+      const publicAddedTitles=new Set(publicAddedVideos.map(video=>video.title));
+      const publicTree=(data.dragTree||[]).filter(node=>node.type!=='video'||(node.videoId!=null?publicBaseIds.has(node.videoId):publicAddedTitles.has(node.title)));
       return res.status(200).json({data:{
         savedAt:data.savedAt,
-        dragTree:data.dragTree||[],
-        addedVideos:data.addedVideos||[],
+        dragTree:publicTree,
+        addedVideos:publicAddedVideos,
         videoVisibility:data.videoVisibility||{},
-        videos:data.videos||[]
+        videos:publicBaseVideos
       }});
     }
     return res.status(200).json({ data });
