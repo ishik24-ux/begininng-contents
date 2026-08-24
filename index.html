@@ -522,6 +522,55 @@ async function loadAdminData(){
  if(!data||newest===backup)await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:newest||adminDataSnapshot()})});
  const apps=await fetch('/api/invite?action=applications');if(apps.ok)state.applications=(await apps.json()).applications;
 }
+function publishedAddedVideo(video,index){
+ return {
+  id:1000000+index,
+  title:video.title,
+  folder:video.parent||'',
+  duration:video.duration||'',
+  new:false,
+  desc:video.summary||'',
+  headline:video.headline||'',
+  url:video.url||'',
+  resources:[
+   ...(video.resourceUrl?[{type:'url',title:'関連資料',url:video.resourceUrl}]:[]),
+   ...(video.pdf?[{type:'pdf',title:video.pdf}]:[])
+  ]
+ };
+}
+function rebuildStudentCourseData(){
+ const baseVideos=videos.filter(video=>state.videoVisibility[video.id]!==false);
+ const addedByTitle=new Map();
+ state.addedVideos.forEach((video,index)=>{
+  if(video.visibility==='非公開')return;
+  const normalized=publishedAddedVideo(video,index);
+  baseVideos.push(normalized);
+  addedByTitle.set(video.title,normalized);
+ });
+ videos.splice(0,videos.length,...baseVideos);
+ const childFolders=parent=>state.dragTree.filter(node=>node.type==='folder'&&(node.parent??null)===parent).sort((a,b)=>(a.order||0)-(b.order||0));
+ const videoIds=parent=>state.dragTree.filter(node=>node.type==='video'&&(node.parent??null)===parent).sort((a,b)=>(a.order||0)-(b.order||0)).map(node=>{
+  if(node.videoId!=null)return videos.find(video=>video.id===node.videoId)?.id;
+  return addedByTitle.get(node.title)?.id;
+ }).filter(id=>id!=null);
+ const buildNode=folder=>({name:folder.title,children:childFolders(folder.id).map(buildNode),videos:videoIds(folder.id)});
+ const categories=childFolders(null).map((root,index)=>{
+  const children=childFolders(root.id).map(buildNode);
+  const directVideos=videoIds(root.id);
+  if(directVideos.length)children.unshift({name:root.title,children:[],videos:directVideos});
+  return {key:root.id||`course-${index}`,title:root.title,subtitle:'',nodes:children};
+ });
+ courseCategories.splice(0,courseCategories.length,...categories);
+ state.expanded={};
+ categories.forEach(category=>state.expanded['cat-'+category.key]=true);
+}
+async function loadStudentData(){
+ const response=await fetch('/api/content');
+ if(!response.ok)throw new Error('student_content_load_failed');
+ const {data}=await response.json();
+ if(data)applyAdminData(data);
+ rebuildStudentCourseData();
+}
 function status(id){return state.videoStatus[id]||'todo'}
 function statusLabel(id){return status(id)==='done'?'視聴完了':status(id)==='watching'?'視聴中':'未視聴'}
 function allIds(node){let a=[...(node.videos||[])];(node.children||[]).forEach(c=>a=a.concat(allIds(c)));return a}
@@ -544,7 +593,7 @@ async function performLogin(){
  state.role=state.loginRole;
  state.page=state.role==='admin'?'adminHome':'home';
  state.currentUserName=account.name||(state.role==='admin'?'管理者':'講座生');
- if(state.role==='admin')await loadAdminData();
+ if(state.role==='admin')await loadAdminData();else await loadStudentData();
  render();
 }
 async function logout(){stopTimer();await fetch('/api/logout',{method:'POST'});state.isAuthenticated=false;render()}
@@ -557,7 +606,7 @@ function render(){
  currentUser.textContent=state.currentUserName||(state.role==='admin'?'デモ 管理者':'山田 花子');
  renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='video'?videoPage():`<div class="card"><h2>マイページ</h2><p class="muted">プロフィール設定のデモ画面です。</p></div>`}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='preview'?previewPage():noticesPage();saveAdminDataSoon()}
 }
-function homePage(){const done=Object.values(state.videoStatus).filter(x=>x==='done').length;return `<h1>ホーム</h1><p class="muted">今日も少しずつ学びを進めましょう。</p><div class="card notice" style="margin-top:18px"><h2>お知らせ</h2><b>Beginningサイト更新のお知らせ</b><p class="muted">新しい動画と資料を追加しました。動画一覧から確認できます。</p></div><div class="grid stats" style="margin-top:18px"><div class="card stat">視聴完了<b>${done}本</b></div><div class="card stat">視聴中<b>${Object.values(state.videoStatus).filter(x=>x==='watching').length}本</b></div><div class="card stat">お気に入り<b>${state.favorites.length}本</b></div></div><div class="card" style="margin-top:18px"><h2>前回の続きから</h2><b>${videos[0].title}</b><p class="muted">${Math.round(state.playback[1]||0)}%まで視聴</p><button class="btn" onclick="openVideo(1)">続きを見る</button></div><div class="section-title"><h2>NEW動画</h2></div><div class="video-grid">${videos.filter(v=>v.new).slice(0,3).map(videoCard).join('')}</div>`}
+function homePage(){const done=Object.values(state.videoStatus).filter(x=>x==='done').length,first=videos[0];return `<h1>ホーム</h1><p class="muted">今日も少しずつ学びを進めましょう。</p><div class="card notice" style="margin-top:18px"><h2>お知らせ</h2><b>Beginningサイト更新のお知らせ</b><p class="muted">新しい動画と資料を追加しました。動画一覧から確認できます。</p></div><div class="grid stats" style="margin-top:18px"><div class="card stat">視聴完了<b>${done}本</b></div><div class="card stat">視聴中<b>${Object.values(state.videoStatus).filter(x=>x==='watching').length}本</b></div><div class="card stat">お気に入り<b>${state.favorites.length}本</b></div></div>${first?`<div class="card" style="margin-top:18px"><h2>前回の続きから</h2><b>${first.title}</b><p class="muted">${Math.round(state.playback[first.id]||0)}%まで視聴</p><button class="btn" onclick="openVideo(${first.id})">続きを見る</button></div>`:`<div class="card" style="margin-top:18px">公開中の動画はまだありません。</div>`}<div class="section-title"><h2>NEW動画</h2></div><div class="video-grid">${videos.filter(v=>v.new).slice(0,3).map(videoCard).join('')}</div>`}
 function videoCard(v){const fav=state.favorites.includes(v.id);return `<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><div style="display:flex;justify-content:space-between"><span class="badge">NEW</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div><h3 style="margin-top:8px">${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`}
 function coursesPage(){return `<div class="course-toolbar"><div><h1>動画一覧</h1><p class="muted">Chapter / Lesson形式で教材を確認できます。</p></div><div class="searchbox"><input id="courseSearch" placeholder="動画を検索" oninput="filterLessons(this.value)"><span>⌕</span></div></div>${courseCategories.map((cat,ci)=>categoryHtml(cat,ci)).join('')}`}
 function categoryHtml(cat,ci){const ids=categoryIds(cat),done=ids.filter(id=>status(id)==='done').length,open=state.expanded['cat-'+cat.key]!==false;return `<section class="course-category ${cat.key==='ai'?'ai':''}"><div class="category-head" onclick="toggleExpand('cat-${cat.key}')"><div class="big-num">${String(ci+1).padStart(2,'0')}</div><div><div style="font-size:20px;font-weight:900">${cat.title}</div><div class="chapter-meta">${ids.length} LESSONS　｜　${done}/${ids.length} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'} chapter-wrap">${cat.nodes.map((n,i)=>chapterHtml(n,cat.key+'-'+i,String(i+1).padStart(2,'0'),false)).join('')}</div></section>`}
@@ -1543,7 +1592,7 @@ async function restoreSession(){
   const response=await fetch('/api/session');
   if(response.ok){
    const account=await response.json();
-   if(account.role===state.loginRole){state.isAuthenticated=true;state.role=account.role;state.currentUserName=account.name;state.page=account.role==='admin'?'adminHome':'home';if(account.role==='admin')await loadAdminData()}
+   if(account.role===state.loginRole){state.isAuthenticated=true;state.role=account.role;state.currentUserName=account.name;state.page=account.role==='admin'?'adminHome':'home';if(account.role==='admin')await loadAdminData();else await loadStudentData()}
   }
  }catch(e){}
  render();
