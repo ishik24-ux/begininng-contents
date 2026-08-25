@@ -603,8 +603,15 @@ async function loadAdminData(){
  adminDataLoaded=true;
  if(!data||newest===backup){const sync=await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:newest||adminDataSnapshot()})});if(!sync.ok)throw new Error(`sync_failed_${sync.status}`)}
  adminSaveState='saved';adminLastSavedAt=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
- const apps=await fetch('/api/invite?action=applications');if(apps.ok)state.applications=(await apps.json()).applications;
+ await loadLearnerAccounts();
  await loadAdminComments();
+}
+async function loadLearnerAccounts(){
+ const response=await fetch('/api/invite?action=applications');
+ if(!response.ok)return;
+ const records=(await response.json()).applications||[];
+ state.applications=records.filter(record=>record.status==='pending');
+ state.learners=records.filter(record=>record.status!=='pending').map(record=>({...record,completed:record.completed||0}));
 }
 async function loadAdminComments(){const response=await fetch('/api/comments');if(response.ok)state.adminComments=(await response.json()).comments||[]}
 function publishedAddedVideo(video,index){
@@ -1454,11 +1461,11 @@ function studentsPage(){
  </div>
 
  <div class="card admin-section">
-  <h2>講座生アカウント</h2>
-  <table class="table"><tr><th>名前</th><th>メール</th><th>状態</th><th>視聴完了</th><th>操作</th></tr>
-   ${state.learners.map((s,i)=>`<tr><td>${s.name}</td><td>${s.email}</td><td><span class="status-pill ${s.status==='active'?'active':'disabled'}">${s.status==='active'?'承認済み':'無効'}</span></td><td>${s.completed||0}本</td><td>${s.status==='active'?`<button class="btn ghost" onclick="disableLearner(${i})">無効にする</button>`:`<button class="btn soft" onclick="enableLearner(${i})">再有効化</button>`}</td></tr>`).join('')}
+  <div class="admin-toolbar"><div><h2 style="margin:0">講座生アカウント・履歴</h2><p class="muted" style="font-size:12px;margin:5px 0 0">卒業・解約・削除済みを含む、すべての登録者を保持します。</p></div><button class="btn ghost" onclick="loadLearnerAccounts().then(render)">更新</button></div>
+  <table class="table"><tr><th>名前</th><th>メール</th><th>状態</th><th>登録日</th><th>操作</th></tr>
+   ${state.learners.length?state.learners.map(s=>`<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.email)}</td><td><span class="status-pill ${s.status==='active'?'active':'disabled'}">${learnerStatusLabel(s.status)}</span></td><td>${s.created_at?new Date(s.created_at).toLocaleDateString('ja-JP'):'-'}</td><td><div class="action-row">${s.status==='active'?`<button class="btn ghost" onclick="setLearnerStatus(${s.id},'disabled')">無効</button><button class="btn ghost" onclick="setLearnerStatus(${s.id},'graduated')">卒業</button><button class="btn ghost" onclick="setLearnerStatus(${s.id},'cancelled')">解約</button><button class="btn ghost" onclick="markLearnerDeleted(${s.id})">削除</button>`:`<button class="btn soft" onclick="setLearnerStatus(${s.id},'active')">再有効化</button>`}</div></td></tr>`).join(''):`<tr><td colspan="5" class="muted">登録者はまだいません。</td></tr>`}
   </table>
-  <p class="muted" style="font-size:12px;margin-top:12px">「無効」にすると、その講座生はメールアドレスとパスワードでログインしても教材を閲覧できない想定です。</p>
+  <p class="muted" style="font-size:12px;margin-top:12px">「受講中」以外のアカウントはログインできません。削除操作も履歴保持のため、データ自体は消去されません。</p>
  </div>
 
  <div class="card admin-section">
@@ -1766,10 +1773,11 @@ function submitApplication(){
  state.learnerInviteUsed=true;
  closeAdminModal();render();
 }
-async function approveApplication(i){const a=state.applications[i];await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'approve',id:a.id})});a.status='active';state.learners.push({name:a.name,email:a.email,status:'active',completed:0,last:'未視聴'});render()}
-async function rejectApplication(i){const a=state.applications[i];await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'reject',id:a.id})});state.applications.splice(i,1);render()}
-function disableLearner(i){state.learners[i].status='disabled';render()}
-function enableLearner(i){state.learners[i].status='active';render()}
+function learnerStatusLabel(status){return ({active:'受講中',disabled:'無効',graduated:'卒業',cancelled:'解約',deleted:'削除済み',rejected:'申請却下'})[status]||status}
+async function approveApplication(i){const a=state.applications[i];const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'approve',id:a.id})});if(!response.ok)return alert('承認できませんでした');await loadLearnerAccounts();render()}
+async function rejectApplication(i){const a=state.applications[i];const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'reject',id:a.id})});if(!response.ok)return alert('却下できませんでした');await loadLearnerAccounts();render()}
+async function setLearnerStatus(id,status){const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'update-status',id,status})});if(!response.ok)return alert('状態を更新できませんでした');await loadLearnerAccounts();render()}
+function markLearnerDeleted(id){if(confirm('一覧には「削除済み」として履歴を残します。よろしいですか？'))setLearnerStatus(id,'deleted')}
 function closeAdminModal(){adminModal.classList.add('hidden')}
 async function restoreSession(){
  try{
