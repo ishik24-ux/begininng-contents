@@ -87,7 +87,7 @@ textarea,input,select{border:1px solid var(--line);border-radius:12px;padding:11
  .main{padding:20px 16px 28px}
  .video-grid{grid-template-columns:1fr 1fr}
  .admin-grid{grid-template-columns:1fr 1fr}
- .mobile-menu-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--text);padding:9px 12px;font-weight:850}
+ .mobile-menu-btn{display:inline-grid;place-items:center;width:42px;height:42px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--text);padding:0;font-size:22px;font-weight:850;line-height:1}
  .mobile-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 4px 16px;margin-bottom:8px;border-bottom:1px solid var(--line)}
  .mobile-drawer-head button{border:1px solid var(--line);border-radius:10px;background:#fff;width:38px;height:38px;font-size:20px}
  .sidebar{display:block;position:fixed;left:0;top:0;width:min(82vw,320px);height:100vh;padding:18px 14px;background:#fff;z-index:70;overflow-y:auto;transform:translateX(-105%);transition:transform .22s ease;box-shadow:0 20px 55px rgba(0,0,0,.18)}
@@ -96,7 +96,35 @@ textarea,input,select{border:1px solid var(--line);border-radius:12px;padding:11
  .mobile-menu-overlay.open{opacity:1;pointer-events:auto}
  body.mobile-menu-open{overflow:hidden}
 }
-@media(max-width:650px){.topbar{padding:0 14px}.top-actions .ghost{display:none}.video-grid,.stats,.admin-grid{grid-template-columns:1fr}.course-toolbar{align-items:stretch;flex-direction:column}.searchbox{max-width:none}.category-head{grid-template-columns:1fr auto;padding:18px 16px}.big-num{font-size:27px}.chapter-head{grid-template-columns:42px 1fr auto;padding:14px 12px}.chapter-head.level2{margin-left:10px}.lesson-row{grid-template-columns:36px 40px minmax(0,1fr);gap:8px}.lesson-actions{grid-column:3;justify-content:flex-start;margin-top:2px}.lesson-summary{display:none}}
+@media(max-width:650px){
+ body{font-size:15px}
+ .topbar{height:64px;padding:0 12px}
+ .topbar .brand{font-size:18px}
+ .top-actions{gap:6px}
+ .top-actions .ghost{display:none}
+ .top-actions .soft{padding:9px 11px;font-size:13px}
+ .main{padding:18px 14px 26px}
+ h1{font-size:23px;line-height:1.4}
+ h2{font-size:18px;line-height:1.45}
+ h3{font-size:16px;line-height:1.5}
+ .btn{padding:9px 12px;font-size:13px}
+ .muted{font-size:13px}
+ .video-grid,.stats,.admin-grid{grid-template-columns:1fr}
+ .course-toolbar{align-items:stretch;flex-direction:column}
+ .searchbox{max-width:none}
+ .category-head{grid-template-columns:1fr auto;padding:16px 14px}
+ .category-head>div>div:first-child{font-size:17px!important;line-height:1.45}
+ .chapter-head{grid-template-columns:38px 1fr auto;padding:13px 10px}
+ .chapter-head.level2{margin-left:8px}
+ .chapter-title{font-size:15px}
+ .chapter-no{width:34px;height:34px;font-size:12px}
+ .lesson-row{grid-template-columns:32px 36px minmax(0,1fr);gap:7px;padding:12px 4px}
+ .lesson-title{font-size:14px}
+ .lesson-actions{grid-column:3;justify-content:flex-start;margin-top:2px}
+ .lesson-summary{display:none}
+ .video-headline{padding:13px 14px}
+ .card{padding:16px;border-radius:16px}
+}
 
 /* Admin v2 */
 .admin-section{margin-top:18px}
@@ -357,7 +385,7 @@ textarea,input,select{border:1px solid var(--line);border-radius:12px;padding:11
   </div>
  </div>
 </section>
-<header class="topbar hidden" id="topbar"><div style="display:flex;align-items:center;gap:10px"><button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()" aria-controls="sidebar" aria-expanded="false">☰ <span>メニュー</span></button><div class="brand">Begininng 教材サイト</div></div><div class="top-actions"><button class="btn soft" id="currentUser">ユーザー</button><button class="btn ghost" onclick="logout()">ログアウト</button></div></header>
+<header class="topbar hidden" id="topbar"><div style="display:flex;align-items:center;gap:10px"><button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()" aria-label="メニューを開く" aria-controls="sidebar" aria-expanded="false">☰</button><div class="brand">Begininng 教材サイト</div></div><div class="top-actions"><button class="btn soft" id="currentUser">ユーザー</button><button class="btn ghost" onclick="logout()">ログアウト</button></div></header>
 <div class="layout hidden" id="appLayout"><aside class="sidebar" id="sidebar"></aside><main class="main" id="main"></main></div>
 <div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="closeMobileMenu()" aria-hidden="true"></div>
 <nav class="mobile-nav hidden" id="mobileNav"></nav>
