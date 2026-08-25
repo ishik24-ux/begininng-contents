@@ -488,6 +488,7 @@ const state={
  inviteUrl:'',
  learners:[],
  applications:[],
+ adminComments:[],
  customFolders:[],
  addedVideos:[],
  videoVisibility:{},
@@ -561,7 +562,9 @@ async function loadAdminData(){
  if(!data||newest===backup){const sync=await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:newest||adminDataSnapshot()})});if(!sync.ok)throw new Error(`sync_failed_${sync.status}`)}
  adminSaveState='saved';adminLastSavedAt=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
  const apps=await fetch('/api/invite?action=applications');if(apps.ok)state.applications=(await apps.json()).applications;
+ await loadAdminComments();
 }
+async function loadAdminComments(){const response=await fetch('/api/comments');if(response.ok)state.adminComments=(await response.json()).comments||[]}
 function publishedAddedVideo(video,index){
  return {
   id:1000000+index,
@@ -630,13 +633,22 @@ async function loadStudentData(){
  const {data}=await response.json();
  if(data)applyAdminData(data);
  rebuildStudentCourseData();
+ const commentResponse=await fetch('/api/comments');
+ if(commentResponse.ok){
+  const serverComments=(await commentResponse.json()).comments||[];
+  serverComments.forEach(comment=>{
+   const list=state.comments[comment.video_id]||(state.comments[comment.video_id]=[]);
+   if(!list.includes(comment.body))list.push(comment.body);
+  });
+  persist();
+ }
 }
 function status(id){return state.videoStatus[id]||'todo'}
 function statusLabel(id){return status(id)==='done'?'視聴完了':status(id)==='watching'?'視聴中':'未視聴'}
 function allIds(node){let a=[...(node.videos||[])];(node.children||[]).forEach(c=>a=a.concat(allIds(c)));return a}
 function nodeCount(node){let ids=allIds(node);return [ids.length,ids.filter(id=>status(id)==='done').length]}
 function categoryIds(cat){return cat.nodes.flatMap(allIds)}
-function navItems(){return state.role==='student'?[['home','ホーム'],['courses','動画一覧'],['favorites','お気に入り'],['commentHistory','コメント・メモ']]:[['adminHome','ダッシュボード'],['structure','講座構成・配置'],['videoManage','動画管理・公開設定'],['students','受講生・招待管理'],['admins','管理者・権限管理'],['preview','講座生プレビュー'],['notices','お知らせ管理']]}
+function navItems(){return state.role==='student'?[['home','ホーム'],['courses','動画一覧'],['favorites','お気に入り'],['commentHistory','コメント・メモ']]:[['adminHome','ダッシュボード'],['structure','講座構成・配置'],['videoManage','動画管理・公開設定'],['students','受講生・招待管理'],['admins','管理者・権限管理'],['commentModeration','コメント管理'],['notices','お知らせ管理']]}
 function renderNav(){const items=navItems();sidebar.innerHTML=items.map(([p,l])=>`<button class="navbtn ${state.page===p?'active':''}" onclick="go('${p}')">${l}</button>`).join('');mobileNav.innerHTML=items.slice(0,4).map(([p,l])=>`<button class="${state.page===p?'active':''}" onclick="go('${p}')">${l}</button>`).join('')}
 function go(p){stopTimer();state.page=p;render()}
 function setLoginRole(role){
@@ -664,7 +676,7 @@ function render(){
  mobileNav.classList.toggle('hidden',!state.isAuthenticated);
  if(!state.isAuthenticated){setLoginRole(loginRoleFromPath());return}
  currentUser.textContent=state.currentUserName||(state.role==='admin'?'デモ 管理者':'山田 花子');
- renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='commentHistory'?commentHistoryPage():state.page==='video'?videoPage():homePage()}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='preview'?previewPage():noticesPage();saveAdminDataSoon()}
+ renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='commentHistory'?commentHistoryPage():state.page==='video'?videoPage():homePage()}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='commentModeration'?commentModerationPage():noticesPage();saveAdminDataSoon()}
 }
 function homePage(){const done=Object.values(state.videoStatus).filter(x=>x==='done').length,first=videos[0];return `<h1>ホーム</h1><p class="muted">今日も少しずつ学びを進めましょう。</p><div class="card notice" style="margin-top:18px"><h2>お知らせ</h2><b>Beginningサイト更新のお知らせ</b><p class="muted">新しい動画と資料を追加しました。動画一覧から確認できます。</p></div><div class="grid stats" style="margin-top:18px"><div class="card stat">視聴完了<b>${done}本</b></div><div class="card stat">視聴中<b>${Object.values(state.videoStatus).filter(x=>x==='watching').length}本</b></div><div class="card stat">お気に入り<b>${state.favorites.length}本</b></div></div>${first?`<div class="card" style="margin-top:18px"><h2>前回の続きから</h2><b>${first.title}</b><p class="muted">${Math.round(state.playback[first.id]||0)}%まで視聴</p><button class="btn" onclick="openVideo(${first.id})">続きを見る</button></div>`:`<div class="card" style="margin-top:18px">公開中の動画はまだありません。</div>`}<div class="section-title"><h2>NEW動画</h2></div><div class="video-grid">${videos.filter(v=>v.new).slice(0,3).map(videoCard).join('')}</div>`}
 function videoCard(v){const fav=state.favorites.includes(v.id);return `<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><div style="display:flex;justify-content:space-between"><span class="badge">NEW</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div><h3 style="margin-top:8px">${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`}
@@ -675,6 +687,7 @@ function lessonRow(id,i){const v=videos.find(x=>x.id===id),fav=state.favorites.i
 function filterLessons(q){q=q.trim().toLowerCase();document.querySelectorAll('.lesson-row').forEach(r=>r.style.display=!q||r.dataset.title.includes(q)?'grid':'none')}
 function toggleExpand(k){state.expanded[k]=!state.expanded[k];render()}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
+function safeExternalUrl(value){try{const url=new URL(String(value||'').trim());return ['http:','https:'].includes(url.protocol)?url.href:''}catch(error){return ''}}
 function commentHistoryPage(){
  const ids=new Set([...Object.keys(state.comments),...Object.keys(state.memo)]);
  const groups=[...ids].map(id=>({
@@ -705,12 +718,18 @@ function videoPlayerHtml(v){
  if(embed)return `<div class="video-player"><iframe src="${embed}" title="${String(v.title||'YouTube動画').replace(/"/g,'&quot;')}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
  return `<div class="video-player"><div class="video-player-error"><b>動画URLを再生できません</b><div style="font-size:13px;margin-top:8px">YouTubeの動画ページURLを管理者画面で確認してください。</div></div></div>`;
 }
-function videoPage(){const v=videos.find(x=>x.id===state.selectedVideo),idx=videos.findIndex(x=>x.id===v.id),fav=state.favorites.includes(v.id);return `<button class="btn ghost" onclick="go('courses')">← 動画一覧</button><h1 style="margin-top:18px">${v.title}</h1><div class="muted">${v.folder}・${v.duration}</div><div class="video-headline"><b style="color:var(--green);font-size:12px">この動画で学ぶこと</b><div style="margin-top:5px;font-weight:750;line-height:1.6">${v.headline}</div></div>${videoPlayerHtml(v)}<div class="card" style="margin-top:18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:8px"><span class="status ${status(v.id)}">${statusLabel(v.id)}</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div></div><div class="tabs"><button class="tab active" onclick="showTab('overview',this)">概要</button><button class="tab" onclick="showTab('comments',this)">コメント</button><button class="tab" onclick="showTab('memo',this)">自分だけのメモ</button></div><div id="pane-overview"><p>${v.desc}</p></div><div id="pane-comments" class="hidden"><textarea id="commentInput" rows="4" placeholder="コメントを入力"></textarea><button class="btn" style="margin-top:10px" onclick="addComment(${v.id})">投稿</button>${(state.comments[v.id]||[]).map(c=>`<div class="card" style="margin-top:10px"><b>${escapeHtml(state.currentUserName||'講座生')}</b><p style="white-space:pre-wrap">${escapeHtml(c)}</p></div>`).join('')}</div><div id="pane-memo" class="hidden"><textarea id="memoInput" rows="7" placeholder="このメモは自分だけが見られます">${state.memo[v.id]||''}</textarea><button class="btn" style="margin-top:10px" onclick="saveMemo(${v.id})">保存</button></div><div style="margin-top:24px"><h2>資料</h2>${v.resources.length?v.resources.map(r=>`<div class="resource"><div style="display:flex;gap:12px;align-items:center"><div class="resource-icon">${r.type==='pdf'?'PDF':'URL'}</div><div><b>${r.title}</b><div class="muted" style="font-size:11px">${r.type==='pdf'?'PDF資料':'外部リンク'}</div></div></div><button class="btn soft" onclick="alert('デモのため表示のみです')">開く</button></div>`).join(''):`<p class="muted">この動画に登録されている資料はありません。</p>`}</div><div style="display:flex;justify-content:space-between;gap:12px;margin-top:24px"><button class="btn ghost" ${idx===0?'disabled':''} onclick="openVideo(${videos[Math.max(0,idx-1)].id})">← 前へ</button><button class="btn" ${idx===videos.length-1?'disabled':''} onclick="openVideo(${videos[Math.min(videos.length-1,idx+1)].id})">次へ →</button></div></div>`}
+function videoPage(){const v=videos.find(x=>x.id===state.selectedVideo),idx=videos.findIndex(x=>x.id===v.id),fav=state.favorites.includes(v.id);return `<button class="btn ghost" onclick="go('courses')">← 動画一覧</button><h1 style="margin-top:18px">${v.title}</h1><div class="muted">${v.folder}・${v.duration}</div><div class="video-headline"><b style="color:var(--green);font-size:12px">この動画で学ぶこと</b><div style="margin-top:5px;font-weight:750;line-height:1.6">${v.headline}</div></div>${videoPlayerHtml(v)}<div class="card" style="margin-top:18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:8px"><span class="status ${status(v.id)}">${statusLabel(v.id)}</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div></div><div class="tabs"><button class="tab active" onclick="showTab('overview',this)">概要</button><button class="tab" onclick="showTab('comments',this)">コメント</button><button class="tab" onclick="showTab('memo',this)">自分だけのメモ</button></div><div id="pane-overview"><p>${v.desc}</p></div><div id="pane-comments" class="hidden"><textarea id="commentInput" rows="4" placeholder="コメントを入力"></textarea><button class="btn" style="margin-top:10px" onclick="addComment(${v.id})">投稿</button>${(state.comments[v.id]||[]).map(c=>`<div class="card" style="margin-top:10px"><b>${escapeHtml(state.currentUserName||'講座生')}</b><p style="white-space:pre-wrap">${escapeHtml(c)}</p></div>`).join('')}</div><div id="pane-memo" class="hidden"><textarea id="memoInput" rows="7" placeholder="このメモは自分だけが見られます">${state.memo[v.id]||''}</textarea><button class="btn" style="margin-top:10px" onclick="saveMemo(${v.id})">保存</button></div><div style="margin-top:24px"><h2>資料</h2>${(v.resources||[]).length?v.resources.map(r=>{const href=safeExternalUrl(r.url);return `<div class="resource"><div style="display:flex;gap:12px;align-items:center"><div class="resource-icon">${r.type==='pdf'?'PDF':'URL'}</div><div><b>${escapeHtml(r.title)}</b><div class="muted" style="font-size:11px">${r.type==='pdf'?'PDF資料':'関連資料リンク'}</div></div></div>${href?`<a class="btn soft" href="${href}" target="_blank" rel="noopener noreferrer">開く</a>`:`<span class="muted" style="font-size:12px">URL未登録</span>`}</div>`}).join(''):`<p class="muted">この動画に登録されている資料はありません。</p>`}</div><div style="display:flex;justify-content:space-between;gap:12px;margin-top:24px"><button class="btn ghost" ${idx===0?'disabled':''} onclick="openVideo(${videos[Math.max(0,idx-1)].id})">← 前へ</button><button class="btn" ${idx===videos.length-1?'disabled':''} onclick="openVideo(${videos[Math.min(videos.length-1,idx+1)].id})">次へ →</button></div></div>`}
 function showTab(n,b){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');['overview','comments','memo'].forEach(x=>document.getElementById('pane-'+x).classList.toggle('hidden',x!==n))}
 function stopTimer(){if(state.playerTimer){clearInterval(state.playerTimer);state.playerTimer=null}}
 function togglePlayback(id){if(state.playerTimer){stopTimer();document.getElementById('playBtn').textContent='▶';return}if((state.playback[id]||0)>=100)state.playback[id]=0;state.videoStatus[id]='watching';persist();document.getElementById('playBtn').textContent='Ⅱ';state.playerTimer=setInterval(()=>{state.playback[id]=Math.min(100,(state.playback[id]||0)+2);document.getElementById('bar').style.width=state.playback[id]+'%';document.getElementById('ptime').textContent=Math.round(state.playback[id])+'% 再生';if(state.playback[id]>=100){state.videoStatus[id]='done';stopTimer();persist();render();setTimeout(()=>showRating(id),100)}else persist()},220)}
 function toggleFav(id){let i=state.favorites.indexOf(id);i>=0?state.favorites.splice(i,1):state.favorites.push(id);persist();render()}
-function addComment(id){let t=document.getElementById('commentInput').value.trim();if(!t)return;(state.comments[id]||(state.comments[id]=[])).push(t);persist();render()}
+async function addComment(id){
+ const input=document.getElementById('commentInput'),body=input.value.trim(),video=videos.find(item=>item.id===id);
+ if(!body||!video)return;
+ const response=await fetch('/api/comments',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({videoId:id,videoTitle:video.title,body})});
+ if(!response.ok)return alert('コメントを保存できませんでした。時間をおいて再度お試しください。');
+ (state.comments[id]||(state.comments[id]=[])).push(body);persist();render();
+}
 function saveMemo(id){state.memo[id]=document.getElementById('memoInput').value;persist();alert('メモを保存しました')}
 function showRating(id){state.selectedVideo=id;ratingModal.classList.remove('hidden');let r=state.ratings[id]||0;document.querySelectorAll('#popupStars .star').forEach((s,i)=>s.classList.toggle('on',i<r))}
 function closeRating(){ratingModal.classList.add('hidden')}
@@ -733,7 +752,7 @@ function adminHome(){
   <div class="card admin-card">有効な講座生<b>${active}</b></div>
   <div class="card admin-card">参加申請中<b>${state.applications.length}</b></div>
   <div class="card admin-card">公開動画<b>${videos.length+state.addedVideos.length}</b></div>
-  <div class="card admin-card">未対応コメント<b>5</b></div>
+  <div class="card admin-card">表示中コメント<b>${state.adminComments.filter(comment=>comment.status==='visible').length}</b></div>
  </div>
  <div class="card admin-section">
   <div class="insight-head" onclick="state.insightOpen=!state.insightOpen;render()">
@@ -1502,6 +1521,21 @@ function submitAdminRegistration(){
 function disableAdmin(i){state.adminAccounts[i].status='disabled';render()}
 function enableAdmin(i){state.adminAccounts[i].status='active';render()}
 
+function commentModerationPage(){
+ return `<div class="admin-toolbar"><div><div class="admin-kicker">COMMENT MODERATION</div><h1>コメント管理</h1><p class="muted">講座生が動画へ投稿したコメントを確認し、表示状態を管理します。</p></div><button class="btn ghost" onclick="loadAdminComments().then(render)">更新</button></div>
+ <div class="card admin-section">${state.adminComments.length?state.adminComments.map(comment=>`<div style="padding:16px 0;border-bottom:1px solid var(--line)"><div style="display:flex;justify-content:space-between;gap:14px;align-items:flex-start;flex-wrap:wrap"><div style="min-width:0;flex:1"><div class="badge">${comment.status==='hidden'?'非表示':'表示中'}</div><h3 style="margin-top:9px">${escapeHtml(comment.video_title)}</h3><div class="muted" style="font-size:12px;margin-top:5px">${escapeHtml(comment.student_name)}（${escapeHtml(comment.student_email)}）・${new Date(comment.created_at).toLocaleString('ja-JP')}</div><div style="white-space:pre-wrap;line-height:1.7;margin-top:12px">${escapeHtml(comment.body)}</div></div><div class="action-row"><button class="btn ${comment.status==='hidden'?'soft':'ghost'}" onclick="setCommentVisibility(${comment.id},'${comment.status==='hidden'?'visible':'hidden'}')">${comment.status==='hidden'?'再表示':'非表示'}</button><button class="btn ghost" onclick="deleteManagedComment(${comment.id})">削除</button></div></div></div>`).join(''):`<p class="muted">投稿されたコメントはまだありません。</p>`}</div>`;
+}
+async function setCommentVisibility(id,status){
+ const response=await fetch('/api/comments',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id,status})});
+ if(!response.ok)return alert('コメントの表示状態を変更できませんでした。');
+ await loadAdminComments();render();
+}
+async function deleteManagedComment(id){
+ if(!confirm('このコメントを完全に削除しますか？'))return;
+ const response=await fetch('/api/comments?id='+encodeURIComponent(id),{method:'DELETE'});
+ if(!response.ok)return alert('コメントを削除できませんでした。');
+ await loadAdminComments();render();
+}
 function previewPage(){
  return `<div><div class="admin-kicker">STUDENT PREVIEW</div><h1>講座生プレビュー</h1><p class="muted">管理者画面から、講座生にどう見えているかを読み取り専用で確認できます。スマホ表示ではメニューを上部にまとめています。</p></div>
  <div class="preview-shell admin-section">
