@@ -15,7 +15,7 @@ export default async function handler(req,res){
   }
   if(req.method==='GET'&&action==='applications'){
     if(!session||session.role!=='admin')return res.status(401).json({error:'unauthorized'});
-    const applications=await sql`SELECT id,name,email,status,created_at FROM applications WHERE status='pending' ORDER BY created_at DESC`;
+    const applications=await sql`SELECT id,name,email,status,created_at FROM applications ORDER BY created_at DESC`;
     return res.status(200).json({applications});
   }
   if(req.method==='GET'){
@@ -33,6 +33,16 @@ export default async function handler(req,res){
   if(req.method==='POST'&&(action==='approve'||action==='reject')){
     if(!session||session.role!=='admin')return res.status(401).json({error:'unauthorized'});
     await sql`UPDATE applications SET status=${action==='approve'?'active':'rejected'} WHERE id=${Number(req.body.id)}`;
+    return res.status(200).json({ok:true});
+  }
+  if(req.method==='POST'&&action==='update-status'){
+    if(!session||session.role!=='admin')return res.status(401).json({error:'unauthorized'});
+    const allowed=new Set(['active','disabled','graduated','cancelled','deleted']);
+    const status=String(req.body?.status||'');
+    const id=Number(req.body?.id);
+    if(!allowed.has(status)||!Number.isFinite(id))return res.status(400).json({error:'invalid_status'});
+    const updated=await sql`UPDATE applications SET status=${status} WHERE id=${id} RETURNING id`;
+    if(!updated.length)return res.status(404).json({error:'not_found'});
     return res.status(200).json({ok:true});
   }
   return res.status(405).end();
