@@ -548,8 +548,17 @@ function rebuildStudentCourseData(){
   addedByTitle.set(video.title,normalized);
  });
  videos.splice(0,videos.length,...baseVideos);
- const childFolders=parent=>state.dragTree.filter(node=>node.type==='folder'&&(node.parent??null)===parent).sort((a,b)=>(a.order||0)-(b.order||0));
- const videoIds=parent=>state.dragTree.filter(node=>node.type==='video'&&(node.parent??null)===parent).sort((a,b)=>(a.order||0)-(b.order||0)).map(node=>{
+ const folders=state.dragTree.filter(node=>node.type==='folder');
+ const foldersById=new Map(folders.map(folder=>[folder.id,folder]));
+ const resolveParentId=node=>{
+  const parent=node.parent??null;
+  if(parent===null||parent==='')return null;
+  if(foldersById.has(parent))return parent;
+  const parentName=String(parent).split(' / ').pop();
+  return folders.find(folder=>folder.title===parent||folder.title===parentName)?.id??parent;
+ };
+ const childFolders=parent=>folders.filter(node=>resolveParentId(node)===parent).sort((a,b)=>(a.order||0)-(b.order||0));
+ const videoIds=parent=>state.dragTree.filter(node=>node.type==='video'&&resolveParentId(node)===parent).sort((a,b)=>(a.order||0)-(b.order||0)).map(node=>{
   if(node.videoId!=null)return videos.find(video=>video.id===node.videoId)?.id;
   return addedByTitle.get(node.title)?.id;
  }).filter(id=>id!=null);
@@ -610,7 +619,7 @@ function homePage(){const done=Object.values(state.videoStatus).filter(x=>x==='d
 function videoCard(v){const fav=state.favorites.includes(v.id);return `<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><div style="display:flex;justify-content:space-between"><span class="badge">NEW</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div><h3 style="margin-top:8px">${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`}
 function coursesPage(){return `<div class="course-toolbar"><div><h1>動画一覧</h1><p class="muted">Chapter / Lesson形式で教材を確認できます。</p></div><div class="searchbox"><input id="courseSearch" placeholder="動画を検索" oninput="filterLessons(this.value)"><span>⌕</span></div></div>${courseCategories.map((cat,ci)=>categoryHtml(cat,ci)).join('')}`}
 function categoryHtml(cat,ci){const ids=categoryIds(cat),done=ids.filter(id=>status(id)==='done').length,open=state.expanded['cat-'+cat.key]!==false;return `<section class="course-category ${cat.key==='ai'?'ai':''}"><div class="category-head" onclick="toggleExpand('cat-${cat.key}')"><div class="big-num">${String(ci+1).padStart(2,'0')}</div><div><div style="font-size:20px;font-weight:900">${cat.title}</div><div class="chapter-meta">${ids.length} LESSONS　｜　${done}/${ids.length} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'} chapter-wrap">${cat.nodes.map((n,i)=>chapterHtml(n,cat.key+'-'+i,String(i+1).padStart(2,'0'),false)).join('')}</div></section>`}
-function chapterHtml(node,key,no,nested){const [total,done]=nodeCount(node),open=!!state.expanded[key];return `<div class="chapter"><div class="chapter-head ${nested?'level2':''}" onclick="toggleExpand('${key}')"><div class="chapter-no">${no}</div><div><div class="chapter-title">${node.name.replace(/^\d+｜/,'')}</div><div class="chapter-meta">${total} LESSON${total===1?'':'S'}　｜　${done}/${total} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'}">${(node.children||[]).map((c,i)=>chapterHtml(c,key+'-'+i,String(i+1).padStart(2,'0'),true)).join('')}${(node.videos||[]).length?`<div class="lesson-list">${node.videos.map((id,i)=>lessonRow(id,i+1)).join('')}</div>`:''}</div></div>`}
+function chapterHtml(node,key,no,nested){const [total,done]=nodeCount(node),open=state.expanded[key]!==false;return `<div class="chapter"><div class="chapter-head ${nested?'level2':''}" onclick="toggleExpand('${key}')"><div class="chapter-no">${no}</div><div><div class="chapter-title">${node.name.replace(/^\d+｜/,'')}</div><div class="chapter-meta">${total} LESSON${total===1?'':'S'}　｜　${done}/${total} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'}">${(node.children||[]).map((c,i)=>chapterHtml(c,key+'-'+i,String(i+1).padStart(2,'0'),true)).join('')}${(node.videos||[]).length?`<div class="lesson-list">${node.videos.map((id,i)=>lessonRow(id,i+1)).join('')}</div>`:''}</div></div>`}
 function lessonRow(id,i){const v=videos.find(x=>x.id===id),fav=state.favorites.includes(id);return `<div class="lesson-row" data-title="${(v.title+' '+v.headline).toLowerCase()}"><div class="lesson-index">${String(i).padStart(2,'0')}</div><button class="lesson-play" onclick="openVideo(${id})">▶</button><div onclick="openVideo(${id})" style="cursor:pointer"><div class="lesson-title">${v.title}</div><div class="lesson-summary">${v.headline}</div><div class="lesson-meta">${v.duration}</div></div><div class="lesson-actions"><span class="status ${status(id)}">${statusLabel(id)}</span><button class="heart ${fav?'on':''}" onclick="event.stopPropagation();toggleFav(${id})">${fav?'♥':'♡'}</button></div></div>`}
 function filterLessons(q){q=q.trim().toLowerCase();document.querySelectorAll('.lesson-row').forEach(r=>r.style.display=!q||r.dataset.title.includes(q)?'grid':'none')}
 function toggleExpand(k){state.expanded[k]=!state.expanded[k];render()}
