@@ -633,15 +633,28 @@ async function loadStudentData(){
  const {data}=await response.json();
  if(data)applyAdminData(data);
  rebuildStudentCourseData();
+ await syncLegacyComments();
  const commentResponse=await fetch('/api/comments');
  if(commentResponse.ok){
   const serverComments=(await commentResponse.json()).comments||[];
-  serverComments.forEach(comment=>{
-   const list=state.comments[comment.video_id]||(state.comments[comment.video_id]=[]);
-   if(!list.includes(comment.body))list.push(comment.body);
-  });
+  state.comments={};
+  serverComments.forEach(comment=>(state.comments[comment.video_id]||(state.comments[comment.video_id]=[])).push(comment.body));
   persist();
  }
+}
+async function syncLegacyComments(){
+ if(localStorage.getItem('beginning-comments-synced-v1')==='done')return;
+ const pending=[];
+ Object.entries(state.comments).forEach(([videoId,comments])=>{
+  const video=videos.find(item=>String(item.id)===String(videoId));
+  if(!video||!Array.isArray(comments))return;
+  comments.forEach(body=>{if(String(body).trim())pending.push({videoId,videoTitle:video.title,body:String(body).trim()})});
+ });
+ for(const comment of pending){
+  const response=await fetch('/api/comments',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(comment)});
+  if(!response.ok)return;
+ }
+ localStorage.setItem('beginning-comments-synced-v1','done');
 }
 function status(id){return state.videoStatus[id]||'todo'}
 function statusLabel(id){return status(id)==='done'?'視聴完了':status(id)==='watching'?'視聴中':'未視聴'}
