@@ -636,7 +636,7 @@ function statusLabel(id){return status(id)==='done'?'視聴完了':status(id)===
 function allIds(node){let a=[...(node.videos||[])];(node.children||[]).forEach(c=>a=a.concat(allIds(c)));return a}
 function nodeCount(node){let ids=allIds(node);return [ids.length,ids.filter(id=>status(id)==='done').length]}
 function categoryIds(cat){return cat.nodes.flatMap(allIds)}
-function navItems(){return state.role==='student'?[['home','ホーム'],['courses','動画一覧'],['favorites','お気に入り'],['commentHistory','コメント履歴']]:[['adminHome','ダッシュボード'],['structure','講座構成・配置'],['videoManage','動画管理・公開設定'],['students','受講生・招待管理'],['admins','管理者・権限管理'],['preview','講座生プレビュー'],['notices','お知らせ管理']]}
+function navItems(){return state.role==='student'?[['home','ホーム'],['courses','動画一覧'],['favorites','お気に入り'],['commentHistory','コメント・メモ']]:[['adminHome','ダッシュボード'],['structure','講座構成・配置'],['videoManage','動画管理・公開設定'],['students','受講生・招待管理'],['admins','管理者・権限管理'],['preview','講座生プレビュー'],['notices','お知らせ管理']]}
 function renderNav(){const items=navItems();sidebar.innerHTML=items.map(([p,l])=>`<button class="navbtn ${state.page===p?'active':''}" onclick="go('${p}')">${l}</button>`).join('');mobileNav.innerHTML=items.slice(0,4).map(([p,l])=>`<button class="${state.page===p?'active':''}" onclick="go('${p}')">${l}</button>`).join('')}
 function go(p){stopTimer();state.page=p;render()}
 function setLoginRole(role){
@@ -676,9 +676,14 @@ function filterLessons(q){q=q.trim().toLowerCase();document.querySelectorAll('.l
 function toggleExpand(k){state.expanded[k]=!state.expanded[k];render()}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
 function commentHistoryPage(){
- const groups=Object.entries(state.comments).map(([id,comments])=>({video:videos.find(video=>String(video.id)===String(id)),comments:Array.isArray(comments)?comments:[]})).filter(group=>group.comments.length);
- const total=groups.reduce((sum,group)=>sum+group.comments.length,0);
- return `<h1>コメント履歴</h1><p class="muted">各動画に投稿したコメントを確認できます。</p>${total?groups.map(group=>`<div class="card" style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2 style="margin:0">${escapeHtml(group.video?.title||'削除済みの動画')}</h2>${group.video?`<button class="btn soft" onclick="openVideo(${group.video.id})">動画を見る</button>`:''}</div>${group.comments.map((comment,index)=>`<div style="border-top:1px solid var(--line);padding:14px 0;${index===0?'margin-top:12px':''}"><div class="muted" style="font-size:11px;margin-bottom:6px">コメント ${index+1}</div><div style="white-space:pre-wrap;line-height:1.7">${escapeHtml(comment)}</div></div>`).join('')}</div>`).join(''):`<div class="card" style="margin-top:18px"><b>投稿したコメントはまだありません。</b><p class="muted" style="margin-bottom:0">動画ページの「コメント」タブから投稿すると、こちらに一覧表示されます。</p></div>`}`;
+ const ids=new Set([...Object.keys(state.comments),...Object.keys(state.memo)]);
+ const groups=[...ids].map(id=>({
+  video:videos.find(video=>String(video.id)===String(id)),
+  comments:Array.isArray(state.comments[id])?state.comments[id]:[],
+  memo:String(state.memo[id]||'').trim()
+ })).filter(group=>group.comments.length||group.memo);
+ const total=groups.reduce((sum,group)=>sum+group.comments.length+(group.memo?1:0),0);
+ return `<h1>コメント・メモ履歴</h1><p class="muted">各動画に投稿したコメントと、自分だけのメモを確認できます。</p>${total?groups.map(group=>`<div class="card" style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2 style="margin:0">${escapeHtml(group.video?.title||'削除済みの動画')}</h2>${group.video?`<button class="btn soft" onclick="openVideo(${group.video.id})">動画を見る</button>`:''}</div>${group.comments.map((comment,index)=>`<div style="border-top:1px solid var(--line);padding:14px 0;${index===0?'margin-top:12px':''}"><div class="badge" style="margin-bottom:7px">コメント ${index+1}</div><div style="white-space:pre-wrap;line-height:1.7">${escapeHtml(comment)}</div></div>`).join('')}${group.memo?`<div style="border-top:1px solid var(--line);padding:14px 0;${group.comments.length?'':'margin-top:12px'}"><div class="badge" style="margin-bottom:7px">自分だけのメモ</div><div style="white-space:pre-wrap;line-height:1.7">${escapeHtml(group.memo)}</div></div>`:''}</div>`).join(''):`<div class="card" style="margin-top:18px"><b>保存したコメント・メモはまだありません。</b><p class="muted" style="margin-bottom:0">動画ページの「コメント」または「自分だけのメモ」から保存すると、こちらに一覧表示されます。</p></div>`}`;
 }
 function favoritesPage(){const favs=videos.filter(v=>state.favorites.includes(v.id));return `<h1>お気に入り</h1><p class="muted">あとで見返したい動画をまとめています。</p>${favs.length?`<div class="video-grid" style="margin-top:18px">${favs.map(v=>`<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><button class="heart on" style="float:right" onclick="toggleFav(${v.id})">♥</button><h3>${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`).join('')}</div>`:`<div class="card" style="margin-top:18px">お気に入りはまだありません。</div>`}`}
 function openVideo(id){stopTimer();state.selectedVideo=id;state.page='video';render()}
