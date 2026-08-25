@@ -548,7 +548,18 @@ function rebuildStudentCourseData(){
   addedByTitle.set(video.title,normalized);
  });
  videos.splice(0,videos.length,...baseVideos);
- const folders=state.dragTree.filter(node=>node.type==='folder');
+ const hierarchyNodes=[...state.dragTree];
+ state.customFolders.forEach((folder,index)=>{
+  const parent=folder.parentId||folder.parent||null;
+  const exists=hierarchyNodes.some(node=>node.type==='folder'&&node.title===folder.name&&((node.parent??null)===parent||node.id===folder.id));
+  if(!exists)hierarchyNodes.push({id:folder.id||`legacy-folder-${index}`,type:'folder',title:folder.name,parent,order:index+1});
+ });
+ state.addedVideos.forEach((video,index)=>{
+  if(video.visibility==='非公開')return;
+  const exists=hierarchyNodes.some(node=>node.type==='video'&&node.title===video.title);
+  if(!exists)hierarchyNodes.push({id:`legacy-video-${index}`,type:'video',title:video.title,parent:video.parentId||video.parent||null,order:index+1});
+ });
+ const folders=hierarchyNodes.filter(node=>node.type==='folder');
  const foldersById=new Map(folders.map(folder=>[folder.id,folder]));
  const resolveParentId=node=>{
   const parent=node.parent??null;
@@ -558,7 +569,7 @@ function rebuildStudentCourseData(){
   return folders.find(folder=>folder.title===parent||folder.title===parentName)?.id??parent;
  };
  const childFolders=parent=>folders.filter(node=>resolveParentId(node)===parent).sort((a,b)=>(a.order||0)-(b.order||0));
- const videoIds=parent=>state.dragTree.filter(node=>node.type==='video'&&resolveParentId(node)===parent).sort((a,b)=>(a.order||0)-(b.order||0)).map(node=>{
+ const videoIds=parent=>hierarchyNodes.filter(node=>node.type==='video'&&resolveParentId(node)===parent).sort((a,b)=>(a.order||0)-(b.order||0)).map(node=>{
   if(node.videoId!=null)return videos.find(video=>video.id===node.videoId)?.id;
   return addedByTitle.get(node.title)?.id;
  }).filter(id=>id!=null);
