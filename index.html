@@ -53,12 +53,12 @@ h1{font-size:28px;margin:0 0 8px} h2{font-size:20px;margin:0 0 14px} h3{margin:0
 .toggle{width:34px;height:34px;border:1px solid var(--line);border-radius:50%;background:#fff;font-size:20px;color:var(--green)}
 .chapter-wrap{padding:14px}
 .chapter{border:1px solid var(--line);border-radius:16px;overflow:hidden;margin-bottom:12px}
-.chapter-head{display:grid;grid-template-columns:54px 1fr auto;gap:12px;align-items:center;padding:16px 18px;background:#fbfdfc;cursor:pointer}
+.chapter-head{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:16px 18px;background:#fbfdfc;cursor:pointer}
 .chapter-head.level2{margin-left:24px;background:#fff}
 .chapter-no{width:38px;height:38px;border-radius:11px;background:var(--mint);display:grid;place-items:center;color:var(--green);font-weight:900}
 .chapter-title{font-weight:850;line-height:1.45}
 .lesson-list{padding:0 14px 12px}
-.lesson-row{display:grid;grid-template-columns:42px 46px minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 6px;border-top:1px solid var(--line)}
+.lesson-row{display:grid;grid-template-columns:46px minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 6px;border-top:1px solid var(--line)}
 .lesson-index{width:34px;height:34px;border-radius:9px;background:#f7f7f4;display:grid;place-items:center;font-weight:900;font-size:12px;color:var(--muted)}
 .lesson-play{width:38px;height:38px;border-radius:50%;border:1.5px solid var(--green);background:#fff;color:var(--green);display:grid;place-items:center}
 .lesson-title{font-weight:800;line-height:1.45}
@@ -114,13 +114,13 @@ textarea,input,select{border:1px solid var(--line);border-radius:12px;padding:11
  .searchbox{max-width:none}
  .category-head{grid-template-columns:1fr auto;padding:16px 14px}
  .category-head>div>div:first-child{font-size:17px!important;line-height:1.45}
- .chapter-head{grid-template-columns:38px 1fr auto;padding:13px 10px}
+ .chapter-head{grid-template-columns:minmax(0,1fr) auto;padding:13px 10px}
  .chapter-head.level2{margin-left:8px}
  .chapter-title{font-size:15px}
  .chapter-no{width:34px;height:34px;font-size:12px}
- .lesson-row{grid-template-columns:32px 36px minmax(0,1fr);gap:7px;padding:12px 4px}
+ .lesson-row{grid-template-columns:36px minmax(0,1fr);gap:7px;padding:12px 4px}
  .lesson-title{font-size:14px}
- .lesson-actions{grid-column:3;justify-content:flex-start;margin-top:2px}
+ .lesson-actions{grid-column:2;justify-content:flex-start;margin-top:2px}
  .lesson-summary{display:block;font-size:12px;line-height:1.6;margin-top:6px;color:var(--muted)}
  .video-headline{padding:13px 14px}
  .card{padding:16px;border-radius:16px}
@@ -739,8 +739,8 @@ function homePage(){const done=Object.values(state.videoStatus).filter(x=>x==='d
 function videoCard(v){const fav=state.favorites.includes(v.id);return `<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><div style="display:flex;justify-content:space-between"><span class="badge">NEW</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div><h3 style="margin-top:8px">${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`}
 function coursesPage(){return `<div class="course-toolbar"><div><h1>動画一覧</h1><p class="muted">Chapter / Lesson形式で教材を確認できます。</p></div><div class="searchbox"><input id="courseSearch" placeholder="動画を検索" oninput="filterLessons(this.value)"><span>⌕</span></div></div>${courseCategories.map((cat,ci)=>categoryHtml(cat,ci)).join('')}`}
 function categoryHtml(cat,ci){const ids=categoryIds(cat),done=ids.filter(id=>status(id)==='done').length,open=state.expanded['cat-'+cat.key]!==false;return `<section class="course-category ${cat.key==='ai'?'ai':''}"><div class="category-head" onclick="toggleExpand('cat-${cat.key}')"><div><div style="font-size:20px;font-weight:900">${cat.title}</div><div class="chapter-meta">${ids.length} LESSONS　｜　${done}/${ids.length} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'} chapter-wrap">${cat.nodes.map((n,i)=>chapterHtml(n,cat.key+'-'+i,String(i+1).padStart(2,'0'),false)).join('')}</div></section>`}
-function chapterHtml(node,key,no,nested){const [total,done]=nodeCount(node),open=!!state.expanded[key];return `<div class="chapter"><div class="chapter-head ${nested?'level2':''}" onclick="toggleExpand('${key}')"><div class="chapter-no">${no}</div><div><div class="chapter-title">${node.name.replace(/^\d+｜/,'')}</div><div class="chapter-meta">${total} LESSON${total===1?'':'S'}　｜　${done}/${total} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'}">${(node.children||[]).map((c,i)=>chapterHtml(c,key+'-'+i,String(i+1).padStart(2,'0'),true)).join('')}${(node.videos||[]).length?`<div class="lesson-list">${node.videos.map((id,i)=>lessonRow(id,i+1)).join('')}</div>`:''}</div></div>`}
-function lessonRow(id,i){const v=videos.find(x=>x.id===id),fav=state.favorites.includes(id);return `<div class="lesson-row" data-title="${(v.title+' '+v.headline).toLowerCase()}"><div class="lesson-index">${String(i).padStart(2,'0')}</div><button class="lesson-play" onclick="openVideo(${id})">▶</button><div onclick="openVideo(${id})" style="cursor:pointer"><div class="lesson-title">${v.title}</div><div class="lesson-summary">${v.headline}</div><div class="lesson-meta">${v.duration}</div></div><div class="lesson-actions"><span class="status ${status(id)}">${statusLabel(id)}</span><button class="heart ${fav?'on':''}" onclick="event.stopPropagation();toggleFav(${id})">${fav?'♥':'♡'}</button></div></div>`}
+function chapterHtml(node,key,no,nested){const [total,done]=nodeCount(node),open=!!state.expanded[key];return `<div class="chapter"><div class="chapter-head ${nested?'level2':''}" onclick="toggleExpand('${key}')"><div><div class="chapter-title">${node.name.replace(/^\d+｜/,'')}</div><div class="chapter-meta">${total} LESSON${total===1?'':'S'}　｜　${done}/${total} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'}">${(node.children||[]).map((c,i)=>chapterHtml(c,key+'-'+i,String(i+1).padStart(2,'0'),true)).join('')}${(node.videos||[]).length?`<div class="lesson-list">${node.videos.map((id,i)=>lessonRow(id,i+1)).join('')}</div>`:''}</div></div>`}
+function lessonRow(id,i){const v=videos.find(x=>x.id===id),fav=state.favorites.includes(id);return `<div class="lesson-row" data-title="${(v.title+' '+v.headline).toLowerCase()}"><button class="lesson-play" onclick="openVideo(${id})">▶</button><div onclick="openVideo(${id})" style="cursor:pointer"><div class="lesson-title">${v.title}</div><div class="lesson-summary">${v.headline}</div><div class="lesson-meta">${v.duration}</div></div><div class="lesson-actions"><span class="status ${status(id)}">${statusLabel(id)}</span><button class="heart ${fav?'on':''}" onclick="event.stopPropagation();toggleFav(${id})">${fav?'♥':'♡'}</button></div></div>`}
 function filterLessons(q){q=q.trim().toLowerCase();document.querySelectorAll('.lesson-row').forEach(r=>r.style.display=!q||r.dataset.title.includes(q)?'grid':'none')}
 function toggleExpand(k){state.expanded[k]=!state.expanded[k];render()}
 function escapeHtml(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]))}
