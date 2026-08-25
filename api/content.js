@@ -18,6 +18,7 @@ export default async function handler(req, res) {
       return res.status(200).json({data:{
         savedAt:data.savedAt,
         dragTree:publicTree,
+        customFolders:data.customFolders||[],
         addedVideos:publicAddedVideos,
         videoVisibility:data.videoVisibility||{},
         videos:publicBaseVideos
