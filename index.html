@@ -68,6 +68,8 @@ h1{font-size:28px;margin:0 0 8px} h2{font-size:20px;margin:0 0 14px} h3{margin:0
 .heart{border:0;background:transparent;font-size:24px;color:#a9a9a4;padding:2px}.heart.on{color:#e55368}
 .video-player{aspect-ratio:16/9;background:#111;border-radius:20px;display:flex;align-items:center;justify-content:center;color:#fff;overflow:hidden}
 .video-player iframe{width:100%;height:100%;border:0}
+.audio-player{background:var(--mint);border:1px solid #d6e9df;border-radius:20px;padding:28px;display:grid;gap:14px}
+.audio-player audio{width:100%}
 .video-player-error{padding:28px;text-align:center;line-height:1.7}
 .video-headline{margin:14px 0 18px;padding:16px 18px;border-radius:14px;background:var(--mint)}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
@@ -624,6 +626,7 @@ function publishedAddedVideo(video,index){
   desc:video.summary||'',
   headline:video.headline||'',
   url:video.url||'',
+  mediaType:video.mediaType||'video',
   resources:[
    ...(video.resourceUrl?[{type:'url',title:'関連資料',url:video.resourceUrl}]:[]),
    ...(video.pdf?[{type:'pdf',title:video.pdf}]:[])
@@ -779,6 +782,10 @@ function youtubeEmbedUrl(value){
  }catch(error){return ''}
 }
 function videoPlayerHtml(v){
+ if(v.mediaType==='audio'){
+  const src=safeExternalUrl(v.url);
+  return src?`<div class="audio-player"><div><span class="badge">音声教材</span><h2 style="margin:10px 0 0">${escapeHtml(v.title)}</h2></div><audio controls preload="metadata" src="${src}">お使いのブラウザは音声再生に対応していません。</audio></div>`:`<div class="audio-player"><b>音声URLを再生できません</b><div class="muted">管理者画面で公開中の音声ファイルURLを確認してください。</div></div>`;
+ }
  const embed=youtubeEmbedUrl(v.url);
  if(embed)return `<div class="video-player"><iframe src="${embed}" title="${String(v.title||'YouTube動画').replace(/"/g,'&quot;')}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
  return `<div class="video-player"><div class="video-player-error"><b>動画URLを再生できません</b><div style="font-size:13px;margin-top:8px">YouTubeの動画ページURLを管理者画面で確認してください。</div></div></div>`;
@@ -1188,7 +1195,7 @@ function structurePage(){
    </div>
    <div class="action-row">
     <button class="btn soft" onclick="openFolderModal(1,'')">＋ 第1階層を追加</button>
-    <button class="btn" onclick="openVideoModal()">＋ 動画を追加</button>
+    <button class="btn" onclick="openVideoModal()">＋ 教材を追加</button>
     <button class="btn ghost" onclick="refreshAdminData()">更新</button>
     <button class="btn" onclick="saveAdminDataNow()">保存</button>
    </div>
@@ -1351,7 +1358,7 @@ function videoManage(){
   <div class="admin-toolbar">
    <div>
     <h1>動画管理</h1>
-    <p class="muted">動画そのものを編集するページです。公開中の動画を非公開に戻すこともできます。</p>
+    <p class="muted">動画・音声教材を編集し、公開状態を管理します。</p>
    </div>
    <button class="btn" onclick="openVideoModal()">＋ 動画を追加</button>
   </div>
@@ -1359,7 +1366,7 @@ function videoManage(){
 
  <div class="admin-help">
   <b>このページでやること</b><br>
-  動画タイトル / 動画URL / 動画概要 / 資料 / 配置先 / 公開・非公開 を管理
+  教材タイプ / タイトル / 動画・音声URL / 概要 / 資料 / 配置先 / 公開・非公開 を管理
  </div>
 
  <div class="card admin-section">
@@ -1400,10 +1407,11 @@ function openVideoEditModal(key){
  }else{
  v=videos.find(x=>x.id===Number(key));
  }
- adminModalTitle.textContent='動画を編集';
+ adminModalTitle.textContent='教材を編集';
  adminModalBody.innerHTML=`<div class="inline-form">
-  <label>動画タイトル <span style="color:var(--green)">必須</span></label><input id="editVideoTitle" value="${(v.title||'').replace(/"/g,'&quot;')}">
-  <label>動画URL <span style="color:var(--green)">必須</span></label><input id="editVideoUrl" value="${v.url||''}" placeholder="YouTube限定公開URLなど">
+  <label>教材タイプ</label><select id="editMediaType"><option value="video" ${(v.mediaType||'video')==='video'?'selected':''}>動画（YouTube）</option><option value="audio" ${v.mediaType==='audio'?'selected':''}>音声</option></select>
+  <label>教材タイトル <span style="color:var(--green)">必須</span></label><input id="editVideoTitle" value="${(v.title||'').replace(/"/g,'&quot;')}">
+  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="editVideoUrl" value="${v.url||''}" placeholder="YouTube URL または音声ファイルURL">
   <label>動画概要 <span class="muted">（任意）</span></label><textarea id="editVideoSummary" rows="4">${v.summary||v.desc||''}</textarea>
   <label>この動画で学ぶこと</label><textarea id="editVideoHeadline" rows="4" placeholder="この動画で押さえたいポイントや、実践につながる内容を入力">${v.headline||''}</textarea>
   <label>資料URL</label><input id="editVideoResource" value="${v.resourceUrl||''}" placeholder="資料URL">
@@ -1416,7 +1424,7 @@ function openVideoEditModal(key){
 function saveVideoEdit(key){
  const title=document.getElementById('editVideoTitle').value.trim();
  const url=document.getElementById('editVideoUrl').value.trim();
- if(!title||!url)return alert('動画タイトル・動画URLは必須です');
+ if(!title||!url)return alert('教材タイトル・動画または音声URLは必須です');
  const headline=document.getElementById('editVideoHeadline').value.trim();
  const parentId=document.getElementById('editVideoParent').value;
  const parentNode=getNode(parentId);
@@ -1429,7 +1437,7 @@ function saveVideoEdit(key){
  }
  if(!target)return;
  const oldTitle=target.title;
- Object.assign(target,{title,url,headline,summary:document.getElementById('editVideoSummary').value.trim(),resourceUrl:document.getElementById('editVideoResource').value.trim(),parentId,parent:parentNode?.title||'',folder:parentNode?.title||'',visibility:document.getElementById('editVideoVisibility').value});
+ Object.assign(target,{title,url,mediaType:document.getElementById('editMediaType').value,headline,summary:document.getElementById('editVideoSummary').value.trim(),resourceUrl:document.getElementById('editVideoResource').value.trim(),parentId,parent:parentNode?.title||'',folder:parentNode?.title||'',visibility:document.getElementById('editVideoVisibility').value});
  const treeVideo=state.dragTree.find(n=>n.type==='video'&&(n.videoId===Number(key)||n.title===oldTitle));
  if(treeVideo){
   treeVideo.title=title;treeVideo.parent=parentId;
@@ -1698,17 +1706,18 @@ function saveFolder(){
 function removeCustomFolder(i){state.customFolders.splice(i,1);render()}
 
 function openVideoModal(defaultParent=''){
- adminModalTitle.textContent='動画を追加';
+ adminModalTitle.textContent='教材を追加';
  adminModalBody.innerHTML=`<div class="inline-form">
-  <label>動画タイトル <span style="color:var(--green)">必須</span></label><input id="videoTitle" placeholder="動画タイトル">
-  <label>動画URL <span style="color:var(--green)">必須</span></label><input id="videoUrl" placeholder="YouTube限定公開URLなど">
+  <label>教材タイプ</label><select id="mediaType"><option value="video">動画（YouTube）</option><option value="audio">音声</option></select>
+  <label>教材タイトル <span style="color:var(--green)">必須</span></label><input id="videoTitle" placeholder="教材タイトル">
+  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="videoUrl" placeholder="YouTube URL またはMP3・M4A・WAV・OGG等の音声URL">
   <label>動画概要 <span class="muted">（任意）</span></label><textarea id="videoSummary" rows="4" placeholder="動画の概要テキスト"></textarea>
   <label>この動画で学ぶこと</label><textarea id="videoHeadline" rows="4" placeholder="この動画で押さえたいポイントや、実践につながる内容を入力"></textarea>
   <label>資料URL</label><input id="resourceUrl" placeholder="Googleドライブ等の資料URL">
   <label>PDF資料</label><input id="resourcePdf" type="file" accept=".pdf">
   <label>配置先階層</label><select id="videoParent">${folderOptions(defaultParent)}</select>
   <label>公開状態</label><select id="videoVisibility"><option>公開</option><option>非公開</option></select>
-  <button class="btn" style="width:100%;margin-top:16px" onclick="saveAdminVideo()">動画を追加</button>
+  <button class="btn" style="width:100%;margin-top:16px" onclick="saveAdminVideo()">教材を追加</button>
  </div>`;
  adminModal.classList.remove('hidden');
 }
@@ -1721,7 +1730,7 @@ function saveAdminVideo(){
  const parentNode=getNode(parentId);
  const parentTitle=parentNode?.title||'';
  state.addedVideos.push({
-  title,url,summary,parent:parentTitle,parentId,
+  title,url,mediaType:document.getElementById('mediaType').value,summary,parent:parentTitle,parentId,
   headline:document.getElementById('videoHeadline').value.trim(),
   resourceUrl:document.getElementById('resourceUrl').value.trim(),
   pdf:document.getElementById('resourcePdf').files[0]?.name||'',
