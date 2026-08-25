@@ -511,8 +511,8 @@ function adminDataSnapshot(){initDragTree();return {savedAt:Date.now(),dragTree:
 function applyAdminData(data){if(!data)return;state.dragTree=data.dragTree||state.dragTree;state.customFolders=data.customFolders||[];state.addedVideos=data.addedVideos||[];state.videoVisibility=data.videoVisibility||{};state.inviteUrl=data.inviteUrl||'';if(Array.isArray(data.videos)){videos.splice(0,videos.length,...data.videos)}invalidateTreeIndex()}
 function updateAdminSaveStatus(){
  const el=document.getElementById('adminSaveStatus');if(!el)return;
- el.textContent=adminSaveState==='saving'?'保存中…':adminSaveState==='saved'?`保存済み ${adminLastSavedAt||''}`:adminSaveState==='error'?'保存に失敗しました。再度「保存」を押してください。':'未保存の変更はありません';
- el.style.color=adminSaveState==='error'?'#b42318':'var(--muted)';
+ el.textContent=adminSaveState==='saving'?'保存中…':adminSaveState==='saved'?`保存済み ${adminLastSavedAt||''}`:adminSaveState==='auth'?'ログイン期限が切れました。再ログインしてください。':adminSaveState==='error'?'保存に失敗しました。再度「保存」を押してください。':'未保存の変更はありません';
+ el.style.color=['error','auth'].includes(adminSaveState)?'#b42318':'var(--muted)';
 }
 async function saveAdminDataNow(showMessage=true){
  if(!state.isAuthenticated||state.role!=='admin')return false;
@@ -522,6 +522,11 @@ async function saveAdminDataNow(showMessage=true){
  adminSaveState='saving';updateAdminSaveStatus();
  try{
   const response=await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data})});
+  if(response.status===401||response.status===403){
+   adminSaveState='auth';updateAdminSaveStatus();
+   if(showMessage)alert('ログイン期限が切れました。入力内容は保持されています。再ログインすると自動同期されます。');
+   state.isAuthenticated=false;state.loginRole='admin';render();return false;
+  }
   if(!response.ok)throw new Error(`save_failed_${response.status}`);
   adminDataLoaded=true;adminSaveState='saved';adminLastSavedAt=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});updateAdminSaveStatus();
   if(showMessage)alert('講座構成を保存しました。講座生画面へ反映されます。');
@@ -551,7 +556,8 @@ async function loadAdminData(){
  const {data}=await response.json();const backupText=localStorage.getItem('begininng-admin-backup');const backup=backupText?JSON.parse(backupText):null;const newest=backup&&(!data||backup.savedAt>(data.savedAt||0))?backup:data;
  if(newest)applyAdminData(newest);
  adminDataLoaded=true;
- if(!data||newest===backup)await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:newest||adminDataSnapshot()})});
+ if(!data||newest===backup){const sync=await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:newest||adminDataSnapshot()})});if(!sync.ok)throw new Error(`sync_failed_${sync.status}`)}
+ adminSaveState='saved';adminLastSavedAt=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
  const apps=await fetch('/api/invite?action=applications');if(apps.ok)state.applications=(await apps.json()).applications;
 }
 function publishedAddedVideo(video,index){
@@ -1072,7 +1078,7 @@ function structurePage(){
     <button class="btn" onclick="saveAdminDataNow()">保存</button>
    </div>
   </div>
-  <div id="adminSaveStatus" class="muted" style="margin-top:10px;font-size:12px">${adminSaveState==='saved'?'保存済み '+(adminLastSavedAt||''):adminSaveState==='saving'?'保存中…':adminSaveState==='error'?'保存に失敗しました。再度「保存」を押してください。':'未保存の変更はありません'}</div>
+  <div id="adminSaveStatus" class="muted" style="margin-top:10px;font-size:12px">${adminSaveState==='saved'?'保存済み '+(adminLastSavedAt||''):adminSaveState==='saving'?'保存中…':adminSaveState==='auth'?'ログイン期限が切れました。再ログインしてください。':adminSaveState==='error'?'保存に失敗しました。再度「保存」を押してください。':'未保存の変更はありません'}</div>
  </div>
 
  <div class="structure-summary">
