@@ -81,8 +81,21 @@ textarea,input,select{border:1px solid var(--line);border-radius:12px;padding:11
 .tree-row{display:flex;align-items:center;gap:10px;padding:12px;border:1px solid var(--line);border-radius:12px;margin:8px 0;background:#fff}.grow{flex:1}
 .insight-head{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:20px;z-index:60}.modal-card{background:#fff;border-radius:20px;padding:22px;max-width:520px;width:100%;box-shadow:var(--shadow)}
-.mobile-nav{display:none}
-@media(max-width:980px){.layout{grid-template-columns:1fr}.sidebar{display:none}.main{padding:20px 16px 86px}.video-grid{grid-template-columns:1fr 1fr}.admin-grid{grid-template-columns:1fr 1fr}.mobile-nav{display:grid;grid-template-columns:repeat(4,1fr);position:fixed;left:0;right:0;bottom:0;background:#fff;border-top:1px solid var(--line);z-index:40}.mobile-nav button{border:0;background:#fff;padding:12px 6px;font-size:11px;font-weight:800}.mobile-nav .active{background:var(--mint);color:var(--green)}}
+.mobile-nav,.mobile-menu-btn,.mobile-drawer-head,.mobile-menu-overlay{display:none}
+@media(max-width:980px){
+ .layout{grid-template-columns:1fr}
+ .main{padding:20px 16px 28px}
+ .video-grid{grid-template-columns:1fr 1fr}
+ .admin-grid{grid-template-columns:1fr 1fr}
+ .mobile-menu-btn{display:inline-flex;align-items:center;gap:7px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--text);padding:9px 12px;font-weight:850}
+ .mobile-drawer-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 4px 16px;margin-bottom:8px;border-bottom:1px solid var(--line)}
+ .mobile-drawer-head button{border:1px solid var(--line);border-radius:10px;background:#fff;width:38px;height:38px;font-size:20px}
+ .sidebar{display:block;position:fixed;left:0;top:0;width:min(82vw,320px);height:100vh;padding:18px 14px;background:#fff;z-index:70;overflow-y:auto;transform:translateX(-105%);transition:transform .22s ease;box-shadow:0 20px 55px rgba(0,0,0,.18)}
+ .sidebar.open{transform:translateX(0)}
+ .mobile-menu-overlay{display:block;position:fixed;inset:0;background:rgba(0,0,0,.38);z-index:60;opacity:0;pointer-events:none;transition:opacity .22s ease}
+ .mobile-menu-overlay.open{opacity:1;pointer-events:auto}
+ body.mobile-menu-open{overflow:hidden}
+}
 @media(max-width:650px){.topbar{padding:0 14px}.top-actions .ghost{display:none}.video-grid,.stats,.admin-grid{grid-template-columns:1fr}.course-toolbar{align-items:stretch;flex-direction:column}.searchbox{max-width:none}.category-head{grid-template-columns:1fr auto;padding:18px 16px}.big-num{font-size:27px}.chapter-head{grid-template-columns:42px 1fr auto;padding:14px 12px}.chapter-head.level2{margin-left:10px}.lesson-row{grid-template-columns:36px 40px minmax(0,1fr);gap:8px}.lesson-actions{grid-column:3;justify-content:flex-start;margin-top:2px}.lesson-summary{display:none}}
 
 /* Admin v2 */
@@ -344,8 +357,9 @@ textarea,input,select{border:1px solid var(--line);border-radius:12px;padding:11
   </div>
  </div>
 </section>
-<header class="topbar hidden" id="topbar"><div class="brand">Begininng 教材サイト</div><div class="top-actions"><button class="btn soft" id="currentUser">ユーザー</button><button class="btn ghost" onclick="logout()">ログアウト</button></div></header>
+<header class="topbar hidden" id="topbar"><div style="display:flex;align-items:center;gap:10px"><button class="mobile-menu-btn" id="mobileMenuBtn" onclick="toggleMobileMenu()" aria-controls="sidebar" aria-expanded="false">☰ <span>メニュー</span></button><div class="brand">Begininng 教材サイト</div></div><div class="top-actions"><button class="btn soft" id="currentUser">ユーザー</button><button class="btn ghost" onclick="logout()">ログアウト</button></div></header>
 <div class="layout hidden" id="appLayout"><aside class="sidebar" id="sidebar"></aside><main class="main" id="main"></main></div>
+<div class="mobile-menu-overlay" id="mobileMenuOverlay" onclick="closeMobileMenu()" aria-hidden="true"></div>
 <nav class="mobile-nav hidden" id="mobileNav"></nav>
 <div class="modal hidden" id="ratingModal"><div class="modal-card" style="text-align:center"><div style="font-size:40px">★</div><h2>動画を見終わりました</h2><p class="muted">この動画はいかがでしたか？</p><div class="rating" id="popupStars"><button class="star" onclick="popupRate(1)">★</button><button class="star" onclick="popupRate(2)">★</button><button class="star" onclick="popupRate(3)">★</button><button class="star" onclick="popupRate(4)">★</button><button class="star" onclick="popupRate(5)">★</button></div><button class="btn ghost" style="margin-top:14px" onclick="closeRating()">あとで評価する</button></div></div>
 <script>
@@ -662,7 +676,9 @@ function allIds(node){let a=[...(node.videos||[])];(node.children||[]).forEach(c
 function nodeCount(node){let ids=allIds(node);return [ids.length,ids.filter(id=>status(id)==='done').length]}
 function categoryIds(cat){return cat.nodes.flatMap(allIds)}
 function navItems(){return state.role==='student'?[['home','ホーム'],['courses','動画一覧'],['favorites','お気に入り'],['commentHistory','コメント・メモ']]:[['adminHome','ダッシュボード'],['structure','講座構成・配置'],['videoManage','動画管理・公開設定'],['students','受講生・招待管理'],['admins','管理者・権限管理'],['commentModeration','コメント管理'],['notices','お知らせ管理']]}
-function renderNav(){const items=navItems();sidebar.innerHTML=items.map(([p,l])=>`<button class="navbtn ${state.page===p?'active':''}" onclick="go('${p}')">${l}</button>`).join('');mobileNav.innerHTML=items.slice(0,4).map(([p,l])=>`<button class="${state.page===p?'active':''}" onclick="go('${p}')">${l}</button>`).join('')}
+function renderNav(){const items=navItems();sidebar.innerHTML=`<div class="mobile-drawer-head"><b style="color:var(--green)">メニュー</b><button onclick="closeMobileMenu()" aria-label="メニューを閉じる">×</button></div>`+items.map(([p,l])=>`<button class="navbtn ${state.page===p?'active':''}" onclick="go('${p}');closeMobileMenu()">${l}</button>`).join('');mobileNav.innerHTML=''}
+function toggleMobileMenu(){const open=!sidebar.classList.contains('open');sidebar.classList.toggle('open',open);mobileMenuOverlay.classList.toggle('open',open);document.body.classList.toggle('mobile-menu-open',open);mobileMenuBtn?.setAttribute('aria-expanded',String(open))}
+function closeMobileMenu(){sidebar.classList.remove('open');mobileMenuOverlay.classList.remove('open');document.body.classList.remove('mobile-menu-open');mobileMenuBtn?.setAttribute('aria-expanded','false')}
 function go(p){stopTimer();state.page=p;render()}
 function setLoginRole(role){
  state.loginRole=role;
@@ -687,7 +703,7 @@ function render(){
  topbar.classList.toggle('hidden',!state.isAuthenticated);
  appLayout.classList.toggle('hidden',!state.isAuthenticated);
  mobileNav.classList.toggle('hidden',!state.isAuthenticated);
- if(!state.isAuthenticated){setLoginRole(loginRoleFromPath());return}
+ if(!state.isAuthenticated){closeMobileMenu();setLoginRole(loginRoleFromPath());return}
  currentUser.textContent=state.currentUserName||(state.role==='admin'?'デモ 管理者':'山田 花子');
  renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='commentHistory'?commentHistoryPage():state.page==='video'?videoPage():homePage()}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='commentModeration'?commentModerationPage():noticesPage();saveAdminDataSoon()}
 }
