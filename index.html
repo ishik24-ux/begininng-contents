@@ -506,13 +506,45 @@ const state={
  }
 };
 function persist(){localStorage.setItem('beginning-role',state.role);localStorage.setItem('beginning-status',JSON.stringify(state.videoStatus));localStorage.setItem('beginning-playback',JSON.stringify(state.playback));localStorage.setItem('beginning-favorites',JSON.stringify(state.favorites));localStorage.setItem('beginning-ratings',JSON.stringify(state.ratings));localStorage.setItem('beginning-comments',JSON.stringify(state.comments));localStorage.setItem('beginning-memo',JSON.stringify(state.memo))}
-let adminSaveTimer=null,adminDataLoaded=false;
+let adminSaveTimer=null,adminDataLoaded=false,adminSaveState='idle',adminLastSavedAt=null;
 function adminDataSnapshot(){initDragTree();return {savedAt:Date.now(),dragTree:state.dragTree,customFolders:state.customFolders,addedVideos:state.addedVideos,videoVisibility:state.videoVisibility,inviteUrl:state.inviteUrl,videos}}
 function applyAdminData(data){if(!data)return;state.dragTree=data.dragTree||state.dragTree;state.customFolders=data.customFolders||[];state.addedVideos=data.addedVideos||[];state.videoVisibility=data.videoVisibility||{};state.inviteUrl=data.inviteUrl||'';if(Array.isArray(data.videos)){videos.splice(0,videos.length,...data.videos)}invalidateTreeIndex()}
+function updateAdminSaveStatus(){
+ const el=document.getElementById('adminSaveStatus');if(!el)return;
+ el.textContent=adminSaveState==='saving'?'保存中…':adminSaveState==='saved'?`保存済み ${adminLastSavedAt||''}`:adminSaveState==='error'?'保存に失敗しました。再度「保存」を押してください。':'未保存の変更はありません';
+ el.style.color=adminSaveState==='error'?'#b42318':'var(--muted)';
+}
+async function saveAdminDataNow(showMessage=true){
+ if(!state.isAuthenticated||state.role!=='admin')return false;
+ clearTimeout(adminSaveTimer);
+ const data=adminDataSnapshot();
+ localStorage.setItem('begininng-admin-backup',JSON.stringify(data));
+ adminSaveState='saving';updateAdminSaveStatus();
+ try{
+  const response=await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data})});
+  if(!response.ok)throw new Error(`save_failed_${response.status}`);
+  adminDataLoaded=true;adminSaveState='saved';adminLastSavedAt=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});updateAdminSaveStatus();
+  if(showMessage)alert('講座構成を保存しました。講座生画面へ反映されます。');
+  return true;
+ }catch(error){
+  adminSaveState='error';updateAdminSaveStatus();
+  if(showMessage)alert('保存に失敗しました。入力内容はこのブラウザに保持されています。再ログイン後にもう一度「保存」を押してください。');
+  return false;
+ }
+}
 function saveAdminDataSoon(){
  if(!adminDataLoaded||!state.isAuthenticated||state.role!=='admin')return;
  const data=adminDataSnapshot();localStorage.setItem('begininng-admin-backup',JSON.stringify(data));
- clearTimeout(adminSaveTimer);adminSaveTimer=setTimeout(()=>fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data})}).catch(()=>{}),450);
+ adminSaveState='saving';updateAdminSaveStatus();
+ clearTimeout(adminSaveTimer);adminSaveTimer=setTimeout(()=>saveAdminDataNow(false),450);
+}
+async function refreshAdminData(){
+ if(!await saveAdminDataNow(false))return alert('更新前の保存に失敗しました。入力内容は保持されています。');
+ try{
+  const response=await fetch('/api/content');if(!response.ok)throw new Error('refresh_failed');
+  const {data}=await response.json();if(data)applyAdminData(data);
+  adminSaveState='saved';render();
+ }catch(error){alert('最新状態を取得できませんでした。現在の表示内容は保持されています。')}
 }
 async function loadAdminData(){
  const response=await fetch('/api/content');if(!response.ok)throw new Error('load_failed');
@@ -1036,8 +1068,11 @@ function structurePage(){
    <div class="action-row">
     <button class="btn soft" onclick="openFolderModal(1,'')">＋ 第1階層を追加</button>
     <button class="btn" onclick="openVideoModal()">＋ 動画を追加</button>
+    <button class="btn ghost" onclick="refreshAdminData()">更新</button>
+    <button class="btn" onclick="saveAdminDataNow()">保存</button>
    </div>
   </div>
+  <div id="adminSaveStatus" class="muted" style="margin-top:10px;font-size:12px">${adminSaveState==='saved'?'保存済み '+(adminLastSavedAt||''):adminSaveState==='saving'?'保存中…':adminSaveState==='error'?'保存に失敗しました。再度「保存」を押してください。':'未保存の変更はありません'}</div>
  </div>
 
  <div class="structure-summary">
