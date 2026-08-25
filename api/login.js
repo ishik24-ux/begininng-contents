@@ -16,8 +16,8 @@ export default async function handler(req, res) {
   const account = isAdmin
     ? { role: 'admin', name: 'サイト管理者', email: process.env.ADMIN_EMAIL }
     : { role: 'student', name: studentAccount.name, email: studentAccount.email };
-  const token = signSession({ ...account, exp: Date.now() + 8 * 60 * 60 * 1000 });
-  res.setHeader('Set-Cookie', `begininng_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=28800`);
+  const token = signSession({ ...account, exp: Date.now() + 24 * 60 * 60 * 1000 });
+  res.setHeader('Set-Cookie', `begininng_session=${token}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=86400`);
   return res.status(200).json(account);
 }
 
