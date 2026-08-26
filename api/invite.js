@@ -6,6 +6,26 @@ function hashPassword(password) {
   const salt=crypto.randomBytes(16).toString('hex');
   return `${salt}:${crypto.scryptSync(password,salt,64).toString('hex')}`;
 }
+function escapeHtml(value){
+  return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
+}
+async function notifyAdminOfApplication({name,email,createdAt,baseUrl}){
+  const apiKey=process.env.RESEND_API_KEY;
+  const to=process.env.ADMIN_NOTIFY_EMAIL;
+  if(!apiKey||!to)return;
+  const adminUrl=`${baseUrl}/admin/login`;
+  const response=await fetch('https://api.resend.com/emails',{
+    method:'POST',
+    headers:{authorization:`Bearer ${apiKey}`,'content-type':'application/json','Idempotency-Key':`student-application-${email}-${createdAt}`},
+    body:JSON.stringify({
+      from:process.env.NOTIFICATION_FROM_EMAIL||'Beginning教材サイト <onboarding@resend.dev>',
+      to:[to],
+      subject:'【Beginning教材サイト】新しい受講申請があります',
+      html:`<h2>新しい受講申請があります</h2><p><b>氏名：</b>${escapeHtml(name)}</p><p><b>メール：</b>${escapeHtml(email)}</p><p><b>申請日時：</b>${escapeHtml(createdAt)}</p><p><a href="${adminUrl}">管理者画面で確認する</a></p>`
+    })
+  });
+  if(!response.ok)throw new Error(`notification_failed_${response.status}`);
+}
 export default async function handler(req,res){
   await ensureSchema(); const sql=db(); const session=readSession(req); const action=req.query?.action||req.body?.action;
   if(req.method==='POST'&&action==='generate'){
@@ -27,7 +47,11 @@ export default async function handler(req,res){
     if(!token||!name||!email||!password||password.length<8)return res.status(400).json({error:'invalid_input'});
     const used=await sql`UPDATE invites SET used=true WHERE token=${token} AND used=false RETURNING token`;
     if(!used.length)return res.status(410).json({error:'invalid_invite'});
-    await sql`INSERT INTO applications (name,email,password_hash) VALUES (${name},${email.toLowerCase()},${hashPassword(password)})`;
+    const normalizedEmail=email.toLowerCase();
+    const created=await sql`INSERT INTO applications (name,email,password_hash) VALUES (${name},${normalizedEmail},${hashPassword(password)}) RETURNING created_at`;
+    const baseUrl=`${req.headers['x-forwarded-proto']||'https'}://${req.headers.host}`;
+    try{await notifyAdminOfApplication({name,email:normalizedEmail,createdAt:created[0]?.created_at||new Date().toISOString(),baseUrl})}
+    catch(error){console.error('application_notification_failed',error)}
     return res.status(200).json({ok:true});
   }
   if(req.method==='POST'&&(action==='approve'||action==='reject')){
