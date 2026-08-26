@@ -12,6 +12,7 @@ export async function ensureSchema() {
   await sql`CREATE TABLE IF NOT EXISTS invites (token text PRIMARY KEY, used boolean NOT NULL DEFAULT false, created_at timestamptz NOT NULL DEFAULT now())`;
   await sql`CREATE TABLE IF NOT EXISTS applications (id bigserial PRIMARY KEY, name text NOT NULL, email text NOT NULL, password_hash text NOT NULL, status text NOT NULL DEFAULT 'pending', created_at timestamptz NOT NULL DEFAULT now())`;
   await sql`CREATE TABLE IF NOT EXISTS app_migrations (id text PRIMARY KEY, applied_at timestamptz NOT NULL DEFAULT now())`;
+  await sql`CREATE TABLE IF NOT EXISTS push_subscriptions (endpoint text PRIMARY KEY, subscription jsonb NOT NULL, created_at timestamptz NOT NULL DEFAULT now())`;
   await sql`CREATE TABLE IF NOT EXISTS video_comments (id bigserial PRIMARY KEY, video_id text NOT NULL, video_title text NOT NULL, student_email text NOT NULL, student_name text NOT NULL, body text NOT NULL, status text NOT NULL DEFAULT 'visible', created_at timestamptz NOT NULL DEFAULT now())`;
   const migration=await sql`SELECT id FROM app_migrations WHERE id='cleanup_20260816_empty_site_v1'`;
   if(!migration.length){
