@@ -1,0 +1,8 @@
+{
+  "name": "Beginning 教材サイト管理",
+  "short_name": "Beginning管理",
+  "start_url": "/admin/login",
+  "display": "standalone",
+  "background_color": "#fbfaf7",
+  "theme_color": "#0b8b61"
+}
