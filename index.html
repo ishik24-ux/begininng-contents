@@ -70,6 +70,7 @@ h1{font-size:28px;margin:0 0 8px} h2{font-size:20px;margin:0 0 14px} h3{margin:0
 .video-player iframe{width:100%;height:100%;border:0}
 .audio-player{background:var(--mint);border:1px solid #d6e9df;border-radius:20px;padding:28px;display:grid;gap:14px}
 .audio-player audio{width:100%}
+.drive-audio-frame{width:100%;height:180px;border:0;border-radius:12px;background:#fff}
 .video-player-error{padding:28px;text-align:center;line-height:1.7}
 .video-headline{margin:14px 0 18px;padding:16px 18px;border-radius:14px;background:var(--mint)}
 .tabs{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0}
@@ -781,10 +782,20 @@ function youtubeEmbedUrl(value){
   return /^[A-Za-z0-9_-]{6,20}$/.test(id)?`https://www.youtube-nocookie.com/embed/${id}?rel=0`:'';
  }catch(error){return ''}
 }
+function googleDrivePreviewUrl(value){
+ try{
+  const url=new URL(String(value||'').trim());
+  if(url.hostname.replace(/^www\./,'').toLowerCase()!=='drive.google.com')return '';
+  const id=url.pathname.match(/\/file\/d\/([^/?#]+)/)?.[1]||url.searchParams.get('id')||'';
+  return /^[A-Za-z0-9_-]{10,}$/.test(id)?`https://drive.google.com/file/d/${id}/preview`:'';
+ }catch(error){return ''}
+}
 function videoPlayerHtml(v){
  if(v.mediaType==='audio'){
+  const drivePreview=googleDrivePreviewUrl(v.url);
+  if(drivePreview)return `<div class="audio-player"><div><span class="badge">音声教材</span><h2 style="margin:10px 0 0">${escapeHtml(v.title)}</h2></div><iframe class="drive-audio-frame" src="${drivePreview}" title="${escapeHtml(v.title)}" allow="autoplay"></iframe></div>`;
   const src=safeExternalUrl(v.url);
-  return src?`<div class="audio-player"><div><span class="badge">音声教材</span><h2 style="margin:10px 0 0">${escapeHtml(v.title)}</h2></div><audio controls preload="metadata" src="${src}">お使いのブラウザは音声再生に対応していません。</audio></div>`:`<div class="audio-player"><b>音声URLを再生できません</b><div class="muted">管理者画面で公開中の音声ファイルURLを確認してください。</div></div>`;
+  return src?`<div class="audio-player"><div><span class="badge">音声教材</span><h2 style="margin:10px 0 0">${escapeHtml(v.title)}</h2></div><audio controls preload="metadata" src="${src}">お使いのブラウザは音声再生に対応していません。</audio></div>`:`<div class="audio-player"><b>音声URLを再生できません</b><div class="muted">Google Driveの共有URLまたは公開中の音声ファイルURLを確認してください。</div></div>`;
  }
  const embed=youtubeEmbedUrl(v.url);
  if(embed)return `<div class="video-player"><iframe src="${embed}" title="${String(v.title||'YouTube動画').replace(/"/g,'&quot;')}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
@@ -1411,7 +1422,7 @@ function openVideoEditModal(key){
  adminModalBody.innerHTML=`<div class="inline-form">
   <label>教材タイプ</label><select id="editMediaType"><option value="video" ${(v.mediaType||'video')==='video'?'selected':''}>動画（YouTube）</option><option value="audio" ${v.mediaType==='audio'?'selected':''}>音声</option></select>
   <label>教材タイトル <span style="color:var(--green)">必須</span></label><input id="editVideoTitle" value="${(v.title||'').replace(/"/g,'&quot;')}">
-  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="editVideoUrl" value="${v.url||''}" placeholder="YouTube URL または音声ファイルURL">
+  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="editVideoUrl" value="${v.url||''}" placeholder="YouTube URL、Google Drive共有URL、または音声ファイルURL"><p class="form-note">Google Drive音声は「リンクを知っている全員・閲覧者」に設定してください。</p>
   <label>動画概要 <span class="muted">（任意）</span></label><textarea id="editVideoSummary" rows="4">${v.summary||v.desc||''}</textarea>
   <label>この動画で学ぶこと</label><textarea id="editVideoHeadline" rows="4" placeholder="この動画で押さえたいポイントや、実践につながる内容を入力">${v.headline||''}</textarea>
   <label>資料URL</label><input id="editVideoResource" value="${v.resourceUrl||''}" placeholder="資料URL">
@@ -1710,7 +1721,7 @@ function openVideoModal(defaultParent=''){
  adminModalBody.innerHTML=`<div class="inline-form">
   <label>教材タイプ</label><select id="mediaType"><option value="video">動画（YouTube）</option><option value="audio">音声</option></select>
   <label>教材タイトル <span style="color:var(--green)">必須</span></label><input id="videoTitle" placeholder="教材タイトル">
-  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="videoUrl" placeholder="YouTube URL またはMP3・M4A・WAV・OGG等の音声URL">
+  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="videoUrl" placeholder="YouTube URL、Google Drive共有URL、または音声ファイルURL"><p class="form-note">Google Drive音声は「リンクを知っている全員・閲覧者」に設定してください。</p>
   <label>動画概要 <span class="muted">（任意）</span></label><textarea id="videoSummary" rows="4" placeholder="動画の概要テキスト"></textarea>
   <label>この動画で学ぶこと</label><textarea id="videoHeadline" rows="4" placeholder="この動画で押さえたいポイントや、実践につながる内容を入力"></textarea>
   <label>資料URL</label><input id="resourceUrl" placeholder="Googleドライブ等の資料URL">
