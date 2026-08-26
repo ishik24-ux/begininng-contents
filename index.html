@@ -1505,7 +1505,7 @@ function studentsPage(){
  <div class="card admin-section">
   <div class="admin-toolbar"><div><h2 style="margin:0">講座生アカウント・履歴</h2><p class="muted" style="font-size:12px;margin:5px 0 0">すべての登録者を履歴として保持します。</p></div><button class="btn ghost" onclick="loadLearnerAccounts().then(render)">更新</button></div>
   <table class="table"><tr><th>名前</th><th>メール</th><th>状態</th><th>登録日</th><th>操作</th></tr>
-   ${state.learners.length?state.learners.map(s=>`<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.email)}</td><td><span class="status-pill ${s.status==='active'?'active':'disabled'}">${learnerStatusLabel(s.status)}</span></td><td>${s.created_at?new Date(s.created_at).toLocaleDateString('ja-JP'):'-'}</td><td><div class="action-row">${s.status==='active'?`<button class="btn ghost" onclick="setLearnerStatus(${s.id},'disabled')">無効</button>`:`<button class="btn soft" onclick="setLearnerStatus(${s.id},'active')">有効</button>`}</div></td></tr>`).join(''):`<tr><td colspan="5" class="muted">登録者はまだいません。</td></tr>`}
+   ${state.learners.length?state.learners.map(s=>`<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.email)}</td><td><span class="status-pill ${s.status==='active'?'active':'disabled'}">${learnerStatusLabel(s.status)}</span></td><td>${s.created_at?new Date(s.created_at).toLocaleDateString('ja-JP'):'-'}</td><td><div class="action-row">${s.status==='active'?`<button class="btn ghost" onclick="setLearnerStatus(${s.id},'disabled')">無効</button>`:`<button class="btn soft" onclick="setLearnerStatus(${s.id},'active')">有効</button>`}${s.status!=='deleted'?`<button class="btn ghost" onclick="markLearnerDeleted(${s.id})">削除</button>`:''}</div></td></tr>`).join(''):`<tr><td colspan="5" class="muted">登録者はまだいません。</td></tr>`}
   </table>
   <p class="muted" style="font-size:12px;margin-top:12px">「無効」のアカウントはログインできません。登録情報は履歴として保持されます。</p>
  </div>
@@ -1854,4 +1854,3 @@ if(inviteToken)renderInviteLanding(inviteToken);else{setLoginRole(loginRoleFromP
 
 
 </body></html>
-
