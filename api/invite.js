@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import { readSession } from './_auth.js';
 import { db, ensureSchema } from './_db.js';
+import { sendAdminPush } from './push.js';
 
 function hashPassword(password) {
   const salt=crypto.randomBytes(16).toString('hex');
@@ -50,8 +51,12 @@ export default async function handler(req,res){
     const normalizedEmail=email.toLowerCase();
     const created=await sql`INSERT INTO applications (name,email,password_hash) VALUES (${name},${normalizedEmail},${hashPassword(password)}) RETURNING created_at`;
     const baseUrl=`${req.headers['x-forwarded-proto']||'https'}://${req.headers.host}`;
-    try{await notifyAdminOfApplication({name,email:normalizedEmail,createdAt:created[0]?.created_at||new Date().toISOString(),baseUrl})}
-    catch(error){console.error('application_notification_failed',error)}
+    const createdAt=created[0]?.created_at||new Date().toISOString();
+    const notifications=await Promise.allSettled([
+      notifyAdminOfApplication({name,email:normalizedEmail,createdAt,baseUrl}),
+      sendAdminPush({title:'新しい受講申請',body:`${name}さんから参加申請が届きました`,url:`${baseUrl}/admin/login`,tag:'student-application'})
+    ]);
+    notifications.forEach(result=>{if(result.status==='rejected')console.error('application_notification_failed',result.reason)});
     return res.status(200).json({ok:true});
   }
   if(req.method==='POST'&&(action==='approve'||action==='reject')){
