@@ -2,6 +2,8 @@
 <html lang="ja"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#0b8b61">
 <title>Begininng 教材サイト</title>
 <style>
 :root{
@@ -819,6 +821,27 @@ function closeRating(){ratingModal.classList.add('hidden')}
 function popupRate(n){state.ratings[state.selectedVideo]=n;persist();document.querySelectorAll('#popupStars .star').forEach((s,i)=>s.classList.toggle('on',i<n));setTimeout(closeRating,350)}
 
 
+function urlBase64ToUint8Array(value){
+ const padding='='.repeat((4-value.length%4)%4);
+ const base64=(value+padding).replace(/-/g,'+').replace(/_/g,'/');
+ const raw=atob(base64);return Uint8Array.from([...raw].map(char=>char.charCodeAt(0)));
+}
+async function enablePushNotifications(){
+ if(!('serviceWorker'in navigator)||!('PushManager'in window))return alert('このブラウザはプッシュ通知に対応していません。ChromeまたはEdgeをご利用ください。');
+ try{
+  const permission=await Notification.requestPermission();
+  if(permission!=='granted')return alert('通知が許可されませんでした。ブラウザ設定をご確認ください。');
+  const registration=await navigator.serviceWorker.register('/sw.js');
+  const keyResponse=await fetch('/api/push');if(!keyResponse.ok)throw new Error('public_key_failed');
+  const {publicKey}=await keyResponse.json();if(!publicKey)throw new Error('push_not_configured');
+  let subscription=await registration.pushManager.getSubscription();
+  if(!subscription)subscription=await registration.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:urlBase64ToUint8Array(publicKey)});
+  const response=await fetch('/api/push',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({subscription})});
+  if(!response.ok)throw new Error('subscription_failed');
+  alert('この端末へのプッシュ通知を有効にしました。');
+ }catch(error){alert('通知設定を完了できませんでした。管理者へお問い合わせください。')}
+}
+
 function isVideoPublic(id){
  return state.videoVisibility[id]!==false;
 }
@@ -830,7 +853,7 @@ function visibilityLabel(id){return isVideoPublic(id)?'公開中':'非公開'}
 function visibilityClass(id){return isVideoPublic(id)?'public':'private'}
 function adminHome(){
  const active=state.learners.filter(x=>x.status==='active').length;
- return `<h1>管理者ダッシュボード</h1><p class="muted">受講生・教材・動画の状態を管理します。</p>
+ return `<div class="admin-toolbar"><div><h1>管理者ダッシュボード</h1><p class="muted">受講生・教材・動画の状態を管理します。</p></div><button class="btn soft" id="pushNotifyButton" onclick="enablePushNotifications()">🔔 通知を許可</button></div>
  <div class="admin-grid" style="margin-top:18px">
   <div class="card admin-card">有効な講座生<b>${active}</b></div>
   <div class="card admin-card">参加申請中<b>${state.applications.length}</b></div>
