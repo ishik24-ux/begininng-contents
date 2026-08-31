@@ -1513,7 +1513,7 @@ function studentsPage(){
  <div class="card admin-section">
   <div class="admin-toolbar"><div><h2 style="margin:0">講座生アカウント・履歴</h2><p class="muted" style="font-size:12px;margin:5px 0 0">すべての登録者を履歴として保持します。</p></div><button class="btn ghost" onclick="loadLearnerAccounts().then(render)">更新</button></div>
   <table class="table"><tr><th>名前</th><th>メール</th><th>状態</th><th>登録日</th><th>操作</th></tr>
-   ${state.learners.length?state.learners.map(s=>`<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.email)}</td><td><span class="status-pill ${s.status==='active'?'active':'disabled'}">${learnerStatusLabel(s.status)}</span></td><td>${s.created_at?new Date(s.created_at).toLocaleDateString('ja-JP'):'-'}</td><td><div class="action-row">${s.status==='active'?`<button class="btn ghost" onclick="setLearnerStatus(${s.id},'disabled')">無効</button>`:`<button class="btn soft" onclick="setLearnerStatus(${s.id},'active')">有効</button>`}${s.status!=='deleted'?`<button class="btn ghost" onclick="markLearnerDeleted(${s.id})">削除</button>`:''}</div></td></tr>`).join(''):`<tr><td colspan="5" class="muted">登録者はまだいません。</td></tr>`}
+   ${state.learners.length?state.learners.map(s=>`<tr><td>${escapeHtml(s.name)}</td><td>${escapeHtml(s.email)}</td><td><span class="status-pill ${s.status==='active'?'active':'disabled'}">${learnerStatusLabel(s.status)}</span></td><td>${s.created_at?new Date(s.created_at).toLocaleDateString('ja-JP'):'-'}</td><td><div class="action-row">${s.status==='active'?`<button class="btn ghost" onclick="setLearnerStatus(${s.id},'disabled')">無効</button>`:`<button class="btn soft" onclick="setLearnerStatus(${s.id},'active')">有効</button>`}${s.status!=='deleted'?`<button class="btn soft" onclick="openLearnerPasswordReset(${s.id})">パスワード再設定</button><button class="btn ghost" onclick="markLearnerDeleted(${s.id})">削除</button>`:''}</div></td></tr>`).join(''):`<tr><td colspan="5" class="muted">登録者はまだいません。</td></tr>`}
   </table>
   <p class="muted" style="font-size:12px;margin-top:12px">「無効」のアカウントはログインできません。登録情報は履歴として保持されます。</p>
  </div>
@@ -1526,6 +1526,28 @@ function studentsPage(){
 
 
 
+function openLearnerPasswordReset(id){
+ const learner=state.learners.find(item=>Number(item.id)===Number(id));
+ if(!learner)return alert('対象の講座生が見つかりません');
+ adminModalTitle.textContent='講座生パスワード再設定';
+ adminModalBody.innerHTML=`<div class="auth-card"><p><b>${escapeHtml(learner.name)}</b></p><p class="muted" style="font-size:12px">${escapeHtml(learner.email)}</p><div class="reset-step"><b>仮パスワードを設定</b><p class="muted" style="font-size:12px">8文字以上で入力し、講座生本人へ安全な方法でお伝えください。アカウント状態や学習データは変更されません。</p></div><label style="display:block;font-size:12px;font-weight:800;margin-top:14px">新しい仮パスワード</label><input id="learnerTemporaryPassword" type="password" autocomplete="new-password" placeholder="8文字以上" style="width:100%;margin-top:5px"><label style="display:block;font-size:12px;font-weight:800;margin-top:12px">新しい仮パスワード（確認）</label><input id="learnerTemporaryPasswordConfirm" type="password" autocomplete="new-password" placeholder="もう一度入力" style="width:100%;margin-top:5px"><button id="learnerPasswordResetButton" class="btn" style="width:100%;margin-top:14px" onclick="saveLearnerPasswordReset(${id})">パスワードを更新</button><p id="learnerPasswordResetMessage" class="muted" style="font-size:12px;margin-top:12px"></p></div>`;
+ adminModal.classList.remove('hidden');
+}
+async function saveLearnerPasswordReset(id){
+ const password=document.getElementById('learnerTemporaryPassword').value;
+ const confirmPassword=document.getElementById('learnerTemporaryPasswordConfirm').value;
+ const message=document.getElementById('learnerPasswordResetMessage');
+ if(password.length<8){message.textContent='8文字以上のパスワードを入力してください。';message.style.color='#b42318';return}
+ if(password!==confirmPassword){message.textContent='確認用パスワードが一致しません。';message.style.color='#b42318';return}
+ const button=document.getElementById('learnerPasswordResetButton');button.disabled=true;button.textContent='更新中…';
+ try{
+  const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'reset-password',id,password})});
+  if(!response.ok)throw new Error('reset_failed');
+  adminModalBody.innerHTML=`<div class="auth-card"><div class="invite-state unused">更新完了</div><h2 style="margin-top:12px">パスワードを更新しました</h2><p class="muted">講座生は新しい仮パスワードでログインできます。仮パスワードを本人へ個別にお伝えください。</p><button class="btn ghost" style="width:100%;margin-top:14px" onclick="closeAdminModal()">閉じる</button></div>`;
+ }catch(error){
+  button.disabled=false;button.textContent='パスワードを更新';message.textContent='更新できませんでした。管理者画面を再読み込みして、もう一度お試しください。';message.style.color='#b42318';
+ }
+}
 function openPasswordReset(userType='講座生'){
  if(userType!=='講座生')return alert('管理者パスワードの変更はサイト管理担当者へご連絡ください。');
  state.passwordResetStage='request';
