@@ -1859,7 +1859,7 @@ function renderInviteLanding(token){
  document.body.innerHTML=`<main style="max-width:520px;margin:8vh auto;padding:20px"><div class="card"><div class="brand">Begininng 教材サイト</div><h1 style="margin-top:18px">講座生の参加申請</h1><p class="muted">お名前・メールアドレス・パスワードを登録してください。管理者承認後にログインできます。</p><div class="inline-form"><label>名前</label><input id="inviteName"><label>メールアドレス</label><input id="inviteEmail" type="email"><label>パスワード（8文字以上）</label><input id="invitePassword" type="password"><button class="btn" style="width:100%;margin-top:18px" onclick="submitInviteRegistration('${token}')">登録して参加申請</button><p id="inviteMessage" class="muted"></p></div></div></main>`;
 }
 async function submitInviteRegistration(token){const name=inviteName.value.trim(),email=inviteEmail.value.trim(),password=invitePassword.value;const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'register',token,name,email,password})});inviteMessage.textContent=response.ok?'参加申請を受け付けました。管理者の承認をお待ちください。':'招待URLが無効か、入力内容に不足があります。';if(response.ok)document.querySelector('button').disabled=true}
-const inviteToken=location.pathname.match(/^\\/invite\\/([^/]+)/)?.[1];
+const inviteToken=location.pathname.match(/^\/invite\/([^/]+)/)?.[1];
 const resetToken=new URLSearchParams(location.search).get('resetToken');
 if(inviteToken)renderInviteLanding(inviteToken);else if(resetToken)renderPasswordResetLanding(resetToken);else{setLoginRole(loginRoleFromPath());restoreSession()}
 </script>
