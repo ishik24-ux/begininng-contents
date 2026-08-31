@@ -52,12 +52,14 @@ export default async function handler(req,res){
     const created=await sql`INSERT INTO applications (name,email,password_hash) VALUES (${name},${normalizedEmail},${hashPassword(password)}) RETURNING created_at`;
     const baseUrl=`${req.headers['x-forwarded-proto']||'https'}://${req.headers.host}`;
     const createdAt=created[0]?.created_at||new Date().toISOString();
-    const notifications=await Promise.allSettled([
+    res.status(200).json({ok:true});
+    void Promise.allSettled([
       notifyAdminOfApplication({name,email:normalizedEmail,createdAt,baseUrl}),
       sendAdminPush({title:'新しい受講申請',body:`${name}さんから参加申請が届きました`,url:`${baseUrl}/admin/login`,tag:'student-application'})
-    ]);
-    notifications.forEach(result=>{if(result.status==='rejected')console.error('application_notification_failed',result.reason)});
-    return res.status(200).json({ok:true});
+    ]).then(notifications=>{
+      notifications.forEach(result=>{if(result.status==='rejected')console.error('application_notification_failed',result.reason)});
+    });
+    return;
   }
   if(req.method==='POST'&&(action==='approve'||action==='reject')){
     if(!session||session.role!=='admin')return res.status(401).json({error:'unauthorized'});
