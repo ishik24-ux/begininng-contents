@@ -1550,10 +1550,8 @@ async function saveLearnerPasswordReset(id){
 }
 function openPasswordReset(userType='講座生'){
  if(userType!=='講座生')return alert('管理者パスワードの変更はサイト管理担当者へご連絡ください。');
- state.passwordResetStage='request';
- state.passwordResetEmail='';
- adminModalTitle.textContent='講座生：パスワード再設定';
- adminModalBody.innerHTML=renderPasswordResetRequest();
+ adminModalTitle.textContent='パスワード再設定';
+ adminModalBody.innerHTML=`<div class="auth-card"><div class="reset-step"><b>サイト管理者へご連絡ください</b><p class="muted" style="font-size:12px">パスワードを忘れた場合は、サイト管理者へ再設定を依頼してください。管理者が仮パスワードを発行します。</p></div><button class="btn ghost" style="width:100%;margin-top:14px" onclick="closeAdminModal()">閉じる</button></div>`;
  adminModal.classList.remove('hidden');
 }
 function renderPasswordResetRequest(){
