@@ -21,7 +21,8 @@ export default async function handler(req, res) {
         customFolders:data.customFolders||[],
         addedVideos:publicAddedVideos,
         videoVisibility:data.videoVisibility||{},
-        videos:publicBaseVideos
+        videos:publicBaseVideos,
+        notices:(data.notices||[]).filter(notice=>notice.published!==false)
       }});
     }
     return res.status(200).json({ data });
@@ -35,4 +36,3 @@ export default async function handler(req, res) {
   }
   return res.status(405).end();
 }
-
