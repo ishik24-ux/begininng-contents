@@ -66,6 +66,16 @@ export default async function handler(req,res){
     await sql`UPDATE applications SET status=${action==='approve'?'active':'rejected'} WHERE id=${Number(req.body.id)}`;
     return res.status(200).json({ok:true});
   }
+  if(req.method==='POST'&&action==='reset-password'){
+    if(!session||session.role!=='admin')return res.status(401).json({error:'unauthorized'});
+    const id=Number(req.body?.id);
+    const password=String(req.body?.password||'');
+    if(!Number.isFinite(id)||password.length<8)return res.status(400).json({error:'invalid_input'});
+    const updated=await sql`UPDATE applications SET password_hash=${hashPassword(password)} WHERE id=${id} AND status<>'deleted' RETURNING id`;
+    if(!updated.length)return res.status(404).json({error:'not_found'});
+    await sql`DELETE FROM password_reset_tokens WHERE email=(SELECT email FROM applications WHERE id=${id})`;
+    return res.status(200).json({ok:true});
+  }
   if(req.method==='POST'&&action==='update-status'){
     if(!session||session.role!=='admin')return res.status(401).json({error:'unauthorized'});
     const allowed=new Set(['active','disabled','graduated','cancelled','deleted']);
