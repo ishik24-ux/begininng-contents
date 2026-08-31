@@ -1,7 +1,8 @@
 {
-  "name": "Beginning 教材サイト管理",
-  "short_name": "Beginning管理",
-  "start_url": "/admin/login",
+  "name": "Beginning 教材サイト",
+  "short_name": "Beginning教材",
+  "start_url": "/login",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#fbfaf7",
   "theme_color": "#0b8b61"
