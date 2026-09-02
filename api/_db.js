@@ -16,6 +16,8 @@ export async function ensureSchema() {
   await sql`CREATE TABLE IF NOT EXISTS video_comments (id bigserial PRIMARY KEY, video_id text NOT NULL, video_title text NOT NULL, student_email text NOT NULL, student_name text NOT NULL, body text NOT NULL, status text NOT NULL DEFAULT 'visible', created_at timestamptz NOT NULL DEFAULT now())`;
   await sql`CREATE TABLE IF NOT EXISTS video_activity (student_email text NOT NULL, student_name text NOT NULL, video_id text NOT NULL, video_title text NOT NULL, progress integer NOT NULL DEFAULT 0, status text NOT NULL DEFAULT 'watching', open_count integer NOT NULL DEFAULT 0, first_viewed_at timestamptz NOT NULL DEFAULT now(), last_viewed_at timestamptz NOT NULL DEFAULT now(), PRIMARY KEY (student_email, video_id))`;
   await sql`CREATE TABLE IF NOT EXISTS password_reset_tokens (token_hash text PRIMARY KEY, email text NOT NULL, expires_at timestamptz NOT NULL, used_at timestamptz, created_at timestamptz NOT NULL DEFAULT now())`;
+  await sql`ALTER TABLE video_activity ADD COLUMN IF NOT EXISTS position_seconds integer NOT NULL DEFAULT 0`;
+  await sql`ALTER TABLE video_activity ADD COLUMN IF NOT EXISTS duration_seconds integer NOT NULL DEFAULT 0`;
   const migration=await sql`SELECT id FROM app_migrations WHERE id='cleanup_20260816_empty_site_v1'`;
   if(!migration.length){
     await sql`DELETE FROM app_content`;
