@@ -529,11 +529,13 @@ const state={
  expanded:{},
  videoStatus:JSON.parse(localStorage.getItem('beginning-status')||'{}'),
  playback:JSON.parse(localStorage.getItem('beginning-playback')||'{}'),
+ playbackSeconds:JSON.parse(localStorage.getItem('beginning-playback-seconds')||'{}'),
+ playbackDurations:JSON.parse(localStorage.getItem('beginning-playback-durations')||'{}'),
  favorites:JSON.parse(localStorage.getItem('beginning-favorites')||'[]'),
  ratings:JSON.parse(localStorage.getItem('beginning-ratings')||'{}'),
  comments:JSON.parse(localStorage.getItem('beginning-comments')||'{}'),
  memo:JSON.parse(localStorage.getItem('beginning-memo')||'{}'),
- playerTimer:null,insightOpen:false,
+ playerTimer:null,mediaTimer:null,youtubePlayer:null,audioPlayer:null,insightOpen:false,
  inviteUrl:'',
  learners:[],
  applications:[],
@@ -559,7 +561,7 @@ const state={
   'cat-ai':false
  }
 };
-function persist(){localStorage.setItem('beginning-role',state.role);localStorage.setItem('beginning-status',JSON.stringify(state.videoStatus));localStorage.setItem('beginning-playback',JSON.stringify(state.playback));localStorage.setItem('beginning-favorites',JSON.stringify(state.favorites));localStorage.setItem('beginning-ratings',JSON.stringify(state.ratings));localStorage.setItem('beginning-comments',JSON.stringify(state.comments));localStorage.setItem('beginning-memo',JSON.stringify(state.memo))}
+function persist(){localStorage.setItem('beginning-role',state.role);localStorage.setItem('beginning-status',JSON.stringify(state.videoStatus));localStorage.setItem('beginning-playback',JSON.stringify(state.playback));localStorage.setItem('beginning-playback-seconds',JSON.stringify(state.playbackSeconds));localStorage.setItem('beginning-playback-durations',JSON.stringify(state.playbackDurations));localStorage.setItem('beginning-favorites',JSON.stringify(state.favorites));localStorage.setItem('beginning-ratings',JSON.stringify(state.ratings));localStorage.setItem('beginning-comments',JSON.stringify(state.comments));localStorage.setItem('beginning-memo',JSON.stringify(state.memo))}
 let adminSaveTimer=null,adminDataLoaded=false,adminSaveState='idle',adminLastSavedAt=null;
 function adminDataSnapshot(){initDragTree();return {savedAt:Date.now(),dragTree:state.dragTree,customFolders:state.customFolders,addedVideos:state.addedVideos,videoVisibility:state.videoVisibility,inviteUrl:state.inviteUrl,notices:state.notices,videos}}
 function applyAdminData(data){if(!data)return;state.dragTree=data.dragTree||state.dragTree;state.customFolders=data.customFolders||[];state.addedVideos=data.addedVideos||[];state.videoVisibility=data.videoVisibility||{};state.inviteUrl=data.inviteUrl||'';if(Array.isArray(data.notices))state.notices=data.notices;if(Array.isArray(data.videos)){videos.splice(0,videos.length,...data.videos)}invalidateTreeIndex()}
@@ -701,8 +703,21 @@ async function loadStudentData(){
   const serverComments=(await commentResponse.json()).comments||[];
   state.comments={};
   serverComments.forEach(comment=>(state.comments[comment.video_id]||(state.comments[comment.video_id]=[])).push(comment.body));
-  persist();
  }
+ const activityResponse=await fetch('/api/activity',{cache:'no-store'});
+ if(activityResponse.ok){
+  const activities=(await activityResponse.json()).activities||[];
+  activities.forEach(activity=>{
+   const id=String(activity.video_id);
+   const serverPosition=Math.max(0,Number(activity.position_seconds)||0);
+   const localPosition=Math.max(0,Number(state.playbackSeconds[id])||0);
+   if(serverPosition>localPosition)state.playbackSeconds[id]=serverPosition;
+   state.playbackDurations[id]=Math.max(Number(state.playbackDurations[id])||0,Number(activity.duration_seconds)||0);
+   state.playback[id]=Math.max(Number(state.playback[id])||0,Number(activity.progress)||0);
+   if(activity.status==='done')state.videoStatus[id]='done';else if((activity.progress||0)>0)state.videoStatus[id]='watching';
+  });
+ }
+ persist();
 }
 async function syncLegacyComments(){
  if(localStorage.getItem('beginning-comments-synced-v1')==='done')return;
@@ -753,7 +768,7 @@ function render(){
  mobileNav.classList.toggle('hidden',!state.isAuthenticated);
  if(!state.isAuthenticated){closeMobileMenu();setLoginRole(loginRoleFromPath());return}
  currentUser.textContent=state.currentUserName||(state.role==='admin'?'デモ 管理者':'山田 花子');
- renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='commentHistory'?commentHistoryPage():state.page==='video'?videoPage():homePage()}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='commentModeration'?commentModerationPage():noticesPage();saveAdminDataSoon()}
+ renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='commentHistory'?commentHistoryPage():state.page==='video'?videoPage():homePage();if(state.page==='video')setTimeout(initMediaProgress,0)}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='commentModeration'?commentModerationPage():noticesPage();saveAdminDataSoon()}
 }
 function homePage(){const done=Object.values(state.videoStatus).filter(x=>x==='done').length,first=videos[0],published=(state.notices||[]).filter(n=>n.published!==false);return `<h1>ホーム</h1><p class="muted">今日も少しずつ学びを進めましょう。</p>${published.map(n=>`<div class="card notice" style="margin-top:18px"><h2>お知らせ</h2><b>${escapeHtml(n.title)}</b><p class="muted" style="white-space:pre-wrap">${escapeHtml(n.body)}</p></div>`).join('')}<div class="grid stats" style="margin-top:18px"><div class="card stat">視聴完了<b>${done}本</b></div><div class="card stat">視聴中<b>${Object.values(state.videoStatus).filter(x=>x==='watching').length}本</b></div><div class="card stat">お気に入り<b>${state.favorites.length}本</b></div></div>${first?`<div class="card" style="margin-top:18px"><h2>前回の続きから</h2><b>${first.title}</b><p class="muted">${Math.round(state.playback[first.id]||0)}%まで視聴</p><button class="btn" onclick="openVideo(${first.id})">続きを見る</button></div>`:`<div class="card" style="margin-top:18px">公開中の動画はまだありません。</div>`}`}
 function videoCard(v){const fav=state.favorites.includes(v.id);return `<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><div style="display:flex;justify-content:space-between"><span class="badge">NEW</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button><button class="btn soft" onclick="completeVideo(${v.id})">視聴完了にする</button></div><h3 style="margin-top:8px">${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`}
@@ -776,10 +791,10 @@ function commentHistoryPage(){
  return `<h1>コメント・メモ履歴</h1><p class="muted">各動画に投稿したコメントと、自分だけのメモを確認できます。</p>${total?groups.map(group=>`<div class="card" style="margin-top:16px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><h2 style="margin:0">${escapeHtml(group.video?.title||'削除済みの動画')}</h2>${group.video?`<button class="btn soft" onclick="openVideo(${group.video.id})">動画を見る</button>`:''}</div>${group.comments.map((comment,index)=>`<div style="border-top:1px solid var(--line);padding:14px 0;${index===0?'margin-top:12px':''}"><div class="badge" style="margin-bottom:7px">コメント ${index+1}</div><div style="white-space:pre-wrap;line-height:1.7">${escapeHtml(comment)}</div></div>`).join('')}${group.memo?`<div style="border-top:1px solid var(--line);padding:14px 0;${group.comments.length?'':'margin-top:12px'}"><div class="badge" style="margin-bottom:7px">自分だけのメモ</div><div style="white-space:pre-wrap;line-height:1.7">${escapeHtml(group.memo)}</div></div>`:''}</div>`).join(''):`<div class="card" style="margin-top:18px"><b>保存したコメント・メモはまだありません。</b><p class="muted" style="margin-bottom:0">動画ページの「コメント」または「自分だけのメモ」から保存すると、こちらに一覧表示されます。</p></div>`}`;
 }
 function favoritesPage(){const favs=videos.filter(v=>state.favorites.includes(v.id));return `<h1>お気に入り</h1><p class="muted">あとで見返したい動画をまとめています。</p>${favs.length?`<div class="video-grid" style="margin-top:18px">${favs.map(v=>`<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><button class="heart on" style="float:right" onclick="toggleFav(${v.id})">♥</button><h3>${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`).join('')}</div>`:`<div class="card" style="margin-top:18px">お気に入りはまだありません。</div>`}`}
-function openVideo(id){stopTimer();state.selectedVideo=id;state.page='video';trackActivity(id,state.playback[id]||0,true);render()}
-async function trackActivity(id,progress=0,opened=false){if(state.role!=='student'||!state.isAuthenticated)return;const video=videos.find(item=>item.id===id);if(!video)return;try{await fetch('/api/activity',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({videoId:String(id),videoTitle:video.title,progress:Math.max(0,Math.min(100,Math.round(progress))),status:progress>=100?'done':'watching',opened})})}catch(error){}}
-function completeVideo(id){state.playback[id]=100;state.videoStatus[id]='done';persist();trackActivity(id,100,false);render()}
-function youtubeEmbedUrl(value){
+function openVideo(id){stopTimer();state.selectedVideo=id;state.page='video';trackActivity(id,state.playback[id]||0,true,state.playbackSeconds[id]||0,state.playbackDurations[id]||0);render()}
+async function trackActivity(id,progress=0,opened=false,positionSeconds=state.playbackSeconds[id]||0,durationSeconds=state.playbackDurations[id]||0){if(state.role!=='student'||!state.isAuthenticated)return;const video=videos.find(item=>item.id===id);if(!video)return;try{await fetch('/api/activity',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({videoId:String(id),videoTitle:video.title,progress:Math.max(0,Math.min(100,Math.round(progress))),positionSeconds:Math.max(0,Math.round(positionSeconds)),durationSeconds:Math.max(0,Math.round(durationSeconds)),opened})})}catch(error){}}
+function completeVideo(id){state.playback[id]=100;state.videoStatus[id]='done';const duration=Number(state.playbackDurations[id])||0;if(duration)state.playbackSeconds[id]=duration;persist();trackActivity(id,100,false,state.playbackSeconds[id]||0,duration);render()}
+function youtubeEmbedUrl(value,startSeconds=0){
  try{
   const url=new URL(String(value||'').trim());
   const host=url.hostname.replace(/^www\./,'').toLowerCase();
@@ -789,7 +804,8 @@ function youtubeEmbedUrl(value){
    if(url.pathname==='/watch')id=url.searchParams.get('v')||'';
    else id=url.pathname.match(/^\/(?:embed|shorts|live)\/([^/?#]+)/)?.[1]||'';
   }
-  return /^[A-Za-z0-9_-]{6,20}$/.test(id)?`https://www.youtube-nocookie.com/embed/${id}?rel=0`:'';
+  const start=Math.max(0,Math.floor(Number(startSeconds)||0));
+  return /^[A-Za-z0-9_-]{6,20}$/.test(id)?`https://www.youtube-nocookie.com/embed/${id}?rel=0&enablejsapi=1&playsinline=1${start?`&start=${start}`:''}`:'';
  }catch(error){return ''}
 }
 function googleDrivePreviewUrl(value){
@@ -805,15 +821,68 @@ function videoPlayerHtml(v){
   const drivePreview=googleDrivePreviewUrl(v.url);
   if(drivePreview)return `<div class="audio-player"><div><span class="badge">音声教材</span><h2 style="margin:10px 0 0">${escapeHtml(v.title)}</h2></div><iframe class="drive-audio-frame" src="${drivePreview}" title="${escapeHtml(v.title)}" allow="autoplay"></iframe></div>`;
   const src=safeExternalUrl(v.url);
-  return src?`<div class="audio-player"><div><span class="badge">音声教材</span><h2 style="margin:10px 0 0">${escapeHtml(v.title)}</h2></div><audio controls preload="metadata" src="${src}">お使いのブラウザは音声再生に対応していません。</audio></div>`:`<div class="audio-player"><b>音声URLを再生できません</b><div class="muted">Google Driveの共有URLまたは公開中の音声ファイルURLを確認してください。</div></div>`;
+  return src?`<div class="audio-player"><div><span class="badge">音声教材</span><h2 style="margin:10px 0 0">${escapeHtml(v.title)}</h2></div><audio id="courseAudioPlayer" controls preload="metadata" src="${src}">お使いのブラウザは音声再生に対応していません。</audio></div>`:`<div class="audio-player"><b>音声URLを再生できません</b><div class="muted">Google Driveの共有URLまたは公開中の音声ファイルURLを確認してください。</div></div>`;
  }
- const embed=youtubeEmbedUrl(v.url);
- if(embed)return `<div class="video-player"><iframe src="${embed}" title="${String(v.title||'YouTube動画').replace(/"/g,'&quot;')}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+ const embed=youtubeEmbedUrl(v.url,state.playbackSeconds[v.id]||0);
+ if(embed)return `<div class="video-player"><iframe id="youtubePlayer" src="${embed}" title="${String(v.title||'YouTube動画').replace(/"/g,'&quot;')}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
  return `<div class="video-player"><div class="video-player-error"><b>動画URLを再生できません</b><div style="font-size:13px;margin-top:8px">YouTubeの動画ページURLを管理者画面で確認してください。</div></div></div>`;
 }
 function videoPage(){const v=videos.find(x=>x.id===state.selectedVideo),idx=videos.findIndex(x=>x.id===v.id),fav=state.favorites.includes(v.id);return `<button class="btn ghost" onclick="go('courses')">← 動画一覧</button><h1 style="margin-top:18px">${v.title}</h1><div class="muted">${v.folder}・${v.duration}</div><div class="video-headline"><b style="color:var(--green);font-size:12px">この動画で学ぶこと</b><div style="margin-top:5px;font-weight:750;line-height:1.6">${v.headline}</div></div>${videoPlayerHtml(v)}<div class="card" style="margin-top:18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:8px"><span class="status ${status(v.id)}">${statusLabel(v.id)}</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div></div><div class="tabs"><button class="tab active" onclick="showTab('overview',this)">概要</button><button class="tab" onclick="showTab('comments',this)">コメント</button><button class="tab" onclick="showTab('memo',this)">自分だけのメモ</button></div><div id="pane-overview"><p>${v.desc}</p></div><div id="pane-comments" class="hidden"><textarea id="commentInput" rows="4" placeholder="コメントを入力"></textarea><button class="btn" style="margin-top:10px" onclick="addComment(${v.id})">投稿</button>${(state.comments[v.id]||[]).map(c=>`<div class="card" style="margin-top:10px"><b>${escapeHtml(state.currentUserName||'講座生')}</b><p style="white-space:pre-wrap">${escapeHtml(c)}</p></div>`).join('')}</div><div id="pane-memo" class="hidden"><textarea id="memoInput" rows="7" placeholder="このメモは自分だけが見られます">${state.memo[v.id]||''}</textarea><button class="btn" style="margin-top:10px" onclick="saveMemo(${v.id})">保存</button></div><div style="margin-top:24px"><h2>資料</h2>${(v.resources||[]).length?v.resources.map(r=>{const href=safeExternalUrl(r.url);return `<div class="resource"><div style="display:flex;gap:12px;align-items:center"><div class="resource-icon">${r.type==='pdf'?'PDF':'URL'}</div><div><b>${escapeHtml(r.title)}</b><div class="muted" style="font-size:11px">${r.type==='pdf'?'PDF資料':'関連資料リンク'}</div></div></div>${href?`<a class="btn soft" href="${href}" target="_blank" rel="noopener noreferrer">開く</a>`:`<span class="muted" style="font-size:12px">URL未登録</span>`}</div>`}).join(''):`<p class="muted">この動画に登録されている資料はありません。</p>`}</div><div style="display:flex;justify-content:space-between;gap:12px;margin-top:24px"><button class="btn ghost" ${idx===0?'disabled':''} onclick="openVideo(${videos[Math.max(0,idx-1)].id})">← 前へ</button><button class="btn" ${idx===videos.length-1?'disabled':''} onclick="openVideo(${videos[Math.min(videos.length-1,idx+1)].id})">次へ →</button></div></div>`}
 function showTab(n,b){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');['overview','comments','memo'].forEach(x=>document.getElementById('pane-'+x).classList.toggle('hidden',x!==n))}
-function stopTimer(){if(state.playerTimer){clearInterval(state.playerTimer);state.playerTimer=null}}
+let youtubeApiPromise=null;
+function loadYouTubeIframeApi(){
+ if(window.YT?.Player)return Promise.resolve(window.YT);
+ if(youtubeApiPromise)return youtubeApiPromise;
+ youtubeApiPromise=new Promise(resolve=>{
+  const previous=window.onYouTubeIframeAPIReady;
+  window.onYouTubeIframeAPIReady=()=>{if(typeof previous==='function')previous();resolve(window.YT)};
+  if(!document.querySelector('script[src="https://www.youtube.com/iframe_api"]')){const script=document.createElement('script');script.src='https://www.youtube.com/iframe_api';document.head.appendChild(script)}
+ });
+ return youtubeApiPromise;
+}
+function savePlaybackPosition(id,position,duration,sendToServer=true){
+ const seconds=Math.max(0,Number(position)||0),total=Math.max(0,Number(duration)||0);
+ state.playbackSeconds[id]=seconds;if(total)state.playbackDurations[id]=total;
+ const progress=total?Math.min(100,seconds/total*100):(state.playback[id]||0);
+ state.playback[id]=progress;
+ if(progress>0&&state.videoStatus[id]!=='done')state.videoStatus[id]='watching';
+ if(progress>=99.5)state.videoStatus[id]='done';
+ persist();
+ if(sendToServer)trackActivity(id,progress,false,seconds,total);
+}
+function captureCurrentPlayback(){
+ const id=state.selectedVideo;if(id==null)return;
+ try{if(state.youtubePlayer?.getCurrentTime)savePlaybackPosition(id,state.youtubePlayer.getCurrentTime(),state.youtubePlayer.getDuration(),true)}catch(error){}
+ try{if(state.audioPlayer)savePlaybackPosition(id,state.audioPlayer.currentTime,state.audioPlayer.duration,true)}catch(error){}
+}
+function stopTimer(){
+ captureCurrentPlayback();
+ if(state.playerTimer){clearInterval(state.playerTimer);state.playerTimer=null}
+ if(state.mediaTimer){clearInterval(state.mediaTimer);state.mediaTimer=null}
+ try{state.youtubePlayer?.destroy?.()}catch(error){}
+ state.youtubePlayer=null;state.audioPlayer=null;
+}
+async function initMediaProgress(){
+ const id=state.selectedVideo,video=videos.find(item=>item.id===id);if(!video||state.page!=='video')return;
+ const audio=document.getElementById('courseAudioPlayer');
+ if(audio){
+  state.audioPlayer=audio;
+  audio.addEventListener('loadedmetadata',()=>{const saved=Math.min(Number(state.playbackSeconds[id])||0,Math.max(0,audio.duration-1));if(saved>0)audio.currentTime=saved;state.playbackDurations[id]=audio.duration;persist()},{once:true});
+  audio.addEventListener('play',()=>{state.videoStatus[id]='watching';persist();if(state.mediaTimer)clearInterval(state.mediaTimer);state.mediaTimer=setInterval(()=>savePlaybackPosition(id,audio.currentTime,audio.duration,true),5000)});
+  audio.addEventListener('pause',()=>{if(state.mediaTimer){clearInterval(state.mediaTimer);state.mediaTimer=null}savePlaybackPosition(id,audio.currentTime,audio.duration,true)});
+  audio.addEventListener('ended',()=>{savePlaybackPosition(id,audio.duration,audio.duration,true);state.videoStatus[id]='done';persist()});
+  return;
+ }
+ const iframe=document.getElementById('youtubePlayer');if(!iframe)return;
+ try{
+  await loadYouTubeIframeApi();if(state.page!=='video'||state.selectedVideo!==id||!document.getElementById('youtubePlayer'))return;
+  state.youtubePlayer=new YT.Player('youtubePlayer',{events:{onReady:event=>{const duration=event.target.getDuration()||0;if(duration){state.playbackDurations[id]=duration;persist()}},onStateChange:event=>{
+   if(event.data===YT.PlayerState.PLAYING){state.videoStatus[id]='watching';persist();if(state.mediaTimer)clearInterval(state.mediaTimer);state.mediaTimer=setInterval(()=>{try{savePlaybackPosition(id,event.target.getCurrentTime(),event.target.getDuration(),true)}catch(error){}},5000)}
+   if(event.data===YT.PlayerState.PAUSED){if(state.mediaTimer){clearInterval(state.mediaTimer);state.mediaTimer=null}savePlaybackPosition(id,event.target.getCurrentTime(),event.target.getDuration(),true)}
+   if(event.data===YT.PlayerState.ENDED){if(state.mediaTimer){clearInterval(state.mediaTimer);state.mediaTimer=null}savePlaybackPosition(id,event.target.getDuration(),event.target.getDuration(),true);state.videoStatus[id]='done';persist()}
+  }}});
+ }catch(error){console.error('youtube_progress_init_failed',error)}
+}
 function togglePlayback(id){if(state.playerTimer){stopTimer();document.getElementById('playBtn').textContent='▶';return}if((state.playback[id]||0)>=100)state.playback[id]=0;state.videoStatus[id]='watching';persist();document.getElementById('playBtn').textContent='Ⅱ';state.playerTimer=setInterval(()=>{state.playback[id]=Math.min(100,(state.playback[id]||0)+2);document.getElementById('bar').style.width=state.playback[id]+'%';document.getElementById('ptime').textContent=Math.round(state.playback[id])+'% 再生';if(state.playback[id]>=100){state.videoStatus[id]='done';stopTimer();persist();render();setTimeout(()=>showRating(id),100)}else persist()},220)}
 function toggleFav(id){let i=state.favorites.indexOf(id);i>=0?state.favorites.splice(i,1):state.favorites.push(id);persist();render()}
 async function addComment(id){
