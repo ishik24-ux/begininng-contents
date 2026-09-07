@@ -808,6 +808,14 @@ function youtubeEmbedUrl(value,startSeconds=0){
   return /^[A-Za-z0-9_-]{6,20}$/.test(id)?`https://www.youtube-nocookie.com/embed/${id}?rel=0&enablejsapi=1&playsinline=1${start?`&start=${start}`:''}`:'';
  }catch(error){return ''}
 }
+function utageEmbedUrl(value){
+ try{
+  const url=new URL(String(value||'').trim());
+  const host=url.hostname.toLowerCase();
+  if(url.protocol!=='https:'||!(host==='utage-system.com'||host.endsWith('.utage-system.com')))return '';
+  return url.href;
+ }catch(error){return ''}
+}
 function googleDrivePreviewUrl(value){
  try{
   const url=new URL(String(value||'').trim());
@@ -825,7 +833,9 @@ function videoPlayerHtml(v){
  }
  const embed=youtubeEmbedUrl(v.url,state.playbackSeconds[v.id]||0);
  if(embed)return `<div class="video-player"><iframe id="youtubePlayer" src="${embed}" title="${String(v.title||'YouTube動画').replace(/"/g,'&quot;')}" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
- return `<div class="video-player"><div class="video-player-error"><b>動画URLを再生できません</b><div style="font-size:13px;margin-top:8px">YouTubeの動画ページURLを管理者画面で確認してください。</div></div></div>`;
+ const utageEmbed=utageEmbedUrl(v.url);
+ if(utageEmbed)return `<div class="video-player"><iframe src="${utageEmbed}" title="${String(v.title||'UTAGE動画').replace(/"/g,'&quot;')}" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen referrerpolicy="strict-origin-when-cross-origin"></iframe></div>`;
+ return `<div class="video-player"><div class="video-player-error"><b>動画URLを再生できません</b><div style="font-size:13px;margin-top:8px">YouTube URL、またはUTAGE動画管理の「埋め込み用URL」を確認してください。</div></div></div>`;
 }
 function videoPage(){const v=videos.find(x=>x.id===state.selectedVideo),idx=videos.findIndex(x=>x.id===v.id),fav=state.favorites.includes(v.id);return `<button class="btn ghost" onclick="go('courses')">← 動画一覧</button><h1 style="margin-top:18px">${v.title}</h1><div class="muted">${v.folder}・${v.duration}</div><div class="video-headline"><b style="color:var(--green);font-size:12px">この動画で学ぶこと</b><div style="margin-top:5px;font-weight:750;line-height:1.6">${v.headline}</div></div>${videoPlayerHtml(v)}<div class="card" style="margin-top:18px"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap"><div style="display:flex;align-items:center;gap:8px"><span class="status ${status(v.id)}">${statusLabel(v.id)}</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button></div></div><div class="tabs"><button class="tab active" onclick="showTab('overview',this)">概要</button><button class="tab" onclick="showTab('comments',this)">コメント</button><button class="tab" onclick="showTab('memo',this)">自分だけのメモ</button></div><div id="pane-overview"><p>${v.desc}</p></div><div id="pane-comments" class="hidden"><textarea id="commentInput" rows="4" placeholder="コメントを入力"></textarea><button class="btn" style="margin-top:10px" onclick="addComment(${v.id})">投稿</button>${(state.comments[v.id]||[]).map(c=>`<div class="card" style="margin-top:10px"><b>${escapeHtml(state.currentUserName||'講座生')}</b><p style="white-space:pre-wrap">${escapeHtml(c)}</p></div>`).join('')}</div><div id="pane-memo" class="hidden"><textarea id="memoInput" rows="7" placeholder="このメモは自分だけが見られます">${state.memo[v.id]||''}</textarea><button class="btn" style="margin-top:10px" onclick="saveMemo(${v.id})">保存</button></div><div style="margin-top:24px"><h2>資料</h2>${(v.resources||[]).length?v.resources.map(r=>{const href=safeExternalUrl(r.url);return `<div class="resource"><div style="display:flex;gap:12px;align-items:center"><div class="resource-icon">${r.type==='pdf'?'PDF':'URL'}</div><div><b>${escapeHtml(r.title)}</b><div class="muted" style="font-size:11px">${r.type==='pdf'?'PDF資料':'関連資料リンク'}</div></div></div>${href?`<a class="btn soft" href="${href}" target="_blank" rel="noopener noreferrer">開く</a>`:`<span class="muted" style="font-size:12px">URL未登録</span>`}</div>`}).join(''):`<p class="muted">この動画に登録されている資料はありません。</p>`}</div><div style="display:flex;justify-content:space-between;gap:12px;margin-top:24px"><button class="btn ghost" ${idx===0?'disabled':''} onclick="openVideo(${videos[Math.max(0,idx-1)].id})">← 前へ</button><button class="btn" ${idx===videos.length-1?'disabled':''} onclick="openVideo(${videos[Math.min(videos.length-1,idx+1)].id})">次へ →</button></div></div>`}
 function showTab(n,b){document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));b.classList.add('active');['overview','comments','memo'].forEach(x=>document.getElementById('pane-'+x).classList.toggle('hidden',x!==n))}
@@ -1520,9 +1530,9 @@ function openVideoEditModal(key){
  }
  adminModalTitle.textContent='教材を編集';
  adminModalBody.innerHTML=`<div class="inline-form">
-  <label>教材タイプ</label><select id="editMediaType"><option value="video" ${(v.mediaType||'video')==='video'?'selected':''}>動画（YouTube）</option><option value="audio" ${v.mediaType==='audio'?'selected':''}>音声</option></select>
+  <label>教材タイプ</label><select id="editMediaType"><option value="video" ${(v.mediaType||'video')==='video'?'selected':''}>動画（YouTube・UTAGE）</option><option value="audio" ${v.mediaType==='audio'?'selected':''}>音声</option></select>
   <label>教材タイトル <span style="color:var(--green)">必須</span></label><input id="editVideoTitle" value="${(v.title||'').replace(/"/g,'&quot;')}">
-  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="editVideoUrl" value="${v.url||''}" placeholder="YouTube URL、Google Drive共有URL、または音声ファイルURL"><p class="form-note">Google Drive音声は「リンクを知っている全員・閲覧者」に設定してください。</p>
+  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="editVideoUrl" value="${v.url||''}" placeholder="YouTube URL、UTAGEの埋め込み用URL、Google Drive共有URL、または音声ファイルURL"><p class="form-note">UTAGE動画は「動画管理」の埋め込み用URLをそのまま貼り付けてください。Google Drive音声は「リンクを知っている全員・閲覧者」に設定してください。</p>
   <label>動画概要 <span class="muted">（任意）</span></label><textarea id="editVideoSummary" rows="4">${v.summary||v.desc||''}</textarea>
   <label>この動画で学ぶこと</label><textarea id="editVideoHeadline" rows="4" placeholder="この動画で押さえたいポイントや、実践につながる内容を入力">${v.headline||''}</textarea>
   <label>資料URL</label><input id="editVideoResource" value="${v.resourceUrl||''}" placeholder="資料URL">
@@ -1854,9 +1864,9 @@ function removeCustomFolder(i){state.customFolders.splice(i,1);render()}
 function openVideoModal(defaultParent=''){
  adminModalTitle.textContent='教材を追加';
  adminModalBody.innerHTML=`<div class="inline-form">
-  <label>教材タイプ</label><select id="mediaType"><option value="video">動画（YouTube）</option><option value="audio">音声</option></select>
+  <label>教材タイプ</label><select id="mediaType"><option value="video">動画（YouTube・UTAGE）</option><option value="audio">音声</option></select>
   <label>教材タイトル <span style="color:var(--green)">必須</span></label><input id="videoTitle" placeholder="教材タイトル">
-  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="videoUrl" placeholder="YouTube URL、Google Drive共有URL、または音声ファイルURL"><p class="form-note">Google Drive音声は「リンクを知っている全員・閲覧者」に設定してください。</p>
+  <label>動画・音声URL <span style="color:var(--green)">必須</span></label><input id="videoUrl" placeholder="YouTube URL、UTAGEの埋め込み用URL、Google Drive共有URL、または音声ファイルURL"><p class="form-note">UTAGE動画は「動画管理」の埋め込み用URLをそのまま貼り付けてください。Google Drive音声は「リンクを知っている全員・閲覧者」に設定してください。</p>
   <label>動画概要 <span class="muted">（任意）</span></label><textarea id="videoSummary" rows="4" placeholder="動画の概要テキスト"></textarea>
   <label>この動画で学ぶこと</label><textarea id="videoHeadline" rows="4" placeholder="この動画で押さえたいポイントや、実践につながる内容を入力"></textarea>
   <label>資料URL</label><input id="resourceUrl" placeholder="Googleドライブ等の資料URL">
