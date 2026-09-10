@@ -14,7 +14,13 @@ export default async function handler(req, res) {
       const publicAddedVideos=(data.addedVideos||[]).filter(video=>video.visibility!=='非公開');
       const publicBaseIds=new Set(publicBaseVideos.map(video=>video.id));
       const publicAddedTitles=new Set(publicAddedVideos.map(video=>video.title));
-      const publicTree=(data.dragTree||[]).filter(node=>node.type!=='video'||(node.videoId!=null?publicBaseIds.has(node.videoId):publicAddedTitles.has(node.title)));
+      const publicArticles=(data.articles||[]).filter(article=>article.status==='published');
+      const publicArticleIds=new Set(publicArticles.map(article=>article.id));
+      const publicTree=(data.dragTree||[]).filter(node=>{
+        if(node.type==='video')return node.videoId!=null?publicBaseIds.has(node.videoId):publicAddedTitles.has(node.title);
+        if(node.type==='article')return publicArticleIds.has(node.articleId);
+        return true;
+      });
       return res.status(200).json({data:{
         savedAt:data.savedAt,
         dragTree:publicTree,
@@ -23,7 +29,7 @@ export default async function handler(req, res) {
         videoVisibility:data.videoVisibility||{},
         videos:publicBaseVideos,
         notices:(data.notices||[]).filter(notice=>notice.published!==false),
-        articles:(data.articles||[]).filter(article=>article.status==='published')
+        articles:publicArticles
       }});
     }
     return res.status(200).json({ data });
