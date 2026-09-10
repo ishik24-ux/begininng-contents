@@ -371,6 +371,17 @@ textarea,input,select{border:1px solid var(--line);border-radius:12px;padding:11
 .demo-account code{font-family:inherit;font-weight:800;color:var(--green)}
 @media(max-width:760px){.login-shell{grid-template-columns:1fr}.login-intro{min-height:auto;padding:28px}.login-intro h1{font-size:28px;margin-top:28px}.login-intro-note{margin-top:30px}.login-panel{padding:28px}}
 
+
+.article-section{margin-top:30px}.article-section>h2{font-size:24px}.article-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.article-card{display:flex;width:100%;padding:0;text-align:left;border:1px solid var(--line);border-radius:18px;background:#fff;overflow:hidden;box-shadow:var(--shadow)}
+.article-card img{width:160px;min-height:130px;object-fit:cover}.article-card span{display:flex;flex-direction:column;gap:9px;padding:20px}.article-card b{font-size:18px}.article-card small{color:var(--muted);line-height:1.7}.article-card em{color:var(--green);font-style:normal;font-weight:800}
+.article-detail{max-width:900px;margin:18px auto;padding:clamp(22px,5vw,56px)}.article-lead{font-size:18px;color:var(--muted);line-height:1.8}.article-cover{width:100%;max-height:480px;object-fit:cover;border-radius:16px;margin:18px 0}
+.article-body{font-size:16px;line-height:2}.article-body h2{font-size:26px;margin-top:42px}.article-body h3{font-size:21px;margin-top:32px}.article-body img{max-width:100%;height:auto;border-radius:12px}.article-body blockquote{border-left:4px solid var(--green);margin:24px 0;padding:8px 20px;background:var(--mint)}
+.article-admin-row{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 0;border-bottom:1px solid var(--line)}.article-admin-row:last-child{border-bottom:0}
+.editor-toolbar{display:flex;flex-wrap:wrap;gap:6px;padding:9px;background:var(--mint);border:1px solid var(--line);border-radius:12px 12px 0 0}.editor-toolbar button{border:1px solid var(--line);background:#fff;border-radius:7px;padding:7px 10px}
+.wysiwyg{min-height:320px;padding:20px;border:1px solid var(--line);border-top:0;border-radius:0 0 12px 12px;background:#fff;line-height:1.9;overflow:auto}.wysiwyg:focus{outline:2px solid rgba(11,139,97,.25)}
+@media(max-width:700px){.article-grid{grid-template-columns:1fr}.article-card img{width:110px}.article-admin-row{align-items:flex-start;flex-direction:column}.article-detail{padding:22px}.article-body{font-size:15px}.editor-toolbar button{font-size:13px}}
+
 </style>
 </head>
 <body>
@@ -525,7 +536,7 @@ const state={
  loginRole:loginRoleFromPath(),
  currentUserName:'',
  role:localStorage.getItem('beginning-role')||'student',
- page:'home',selectedVideo:null,
+ page:'home',selectedVideo:null,selectedArticle:null,
  expanded:{},
  videoStatus:JSON.parse(localStorage.getItem('beginning-status')||'{}'),
  playback:JSON.parse(localStorage.getItem('beginning-playback')||'{}'),
@@ -542,6 +553,7 @@ const state={
  adminComments:[],
  adminActivities:[],
  notices:[{id:'welcome',title:'Beginningサイト更新のお知らせ',body:'新しい動画と資料を追加しました。',published:true,createdAt:Date.now()}],
+ articles:[],
  customFolders:[],
  addedVideos:[],
  videoVisibility:{},
@@ -563,8 +575,8 @@ const state={
 };
 function persist(){localStorage.setItem('beginning-role',state.role);localStorage.setItem('beginning-status',JSON.stringify(state.videoStatus));localStorage.setItem('beginning-playback',JSON.stringify(state.playback));localStorage.setItem('beginning-playback-seconds',JSON.stringify(state.playbackSeconds));localStorage.setItem('beginning-playback-durations',JSON.stringify(state.playbackDurations));localStorage.setItem('beginning-favorites',JSON.stringify(state.favorites));localStorage.setItem('beginning-ratings',JSON.stringify(state.ratings));localStorage.setItem('beginning-comments',JSON.stringify(state.comments));localStorage.setItem('beginning-memo',JSON.stringify(state.memo))}
 let adminSaveTimer=null,adminDataLoaded=false,adminSaveState='idle',adminLastSavedAt=null;
-function adminDataSnapshot(){initDragTree();return {savedAt:Date.now(),dragTree:state.dragTree,customFolders:state.customFolders,addedVideos:state.addedVideos,videoVisibility:state.videoVisibility,inviteUrl:state.inviteUrl,notices:state.notices,videos}}
-function applyAdminData(data){if(!data)return;state.dragTree=data.dragTree||state.dragTree;state.customFolders=data.customFolders||[];state.addedVideos=data.addedVideos||[];state.videoVisibility=data.videoVisibility||{};state.inviteUrl=data.inviteUrl||'';if(Array.isArray(data.notices))state.notices=data.notices;if(Array.isArray(data.videos)){videos.splice(0,videos.length,...data.videos)}invalidateTreeIndex()}
+function adminDataSnapshot(){initDragTree();return {savedAt:Date.now(),dragTree:state.dragTree,customFolders:state.customFolders,addedVideos:state.addedVideos,videoVisibility:state.videoVisibility,inviteUrl:state.inviteUrl,notices:state.notices,articles:state.articles,videos}}
+function applyAdminData(data){if(!data)return;state.dragTree=data.dragTree||state.dragTree;state.customFolders=data.customFolders||[];state.addedVideos=data.addedVideos||[];state.videoVisibility=data.videoVisibility||{};state.inviteUrl=data.inviteUrl||'';if(Array.isArray(data.notices))state.notices=data.notices;if(Array.isArray(data.articles))state.articles=data.articles;if(Array.isArray(data.videos)){videos.splice(0,videos.length,...data.videos)}invalidateTreeIndex()}
 function updateAdminSaveStatus(){
  const el=document.getElementById('adminSaveStatus');if(!el)return;
  el.textContent=adminSaveState==='saving'?'保存中…':adminSaveState==='saved'?`保存済み ${adminLastSavedAt||''}`:adminSaveState==='auth'?'ログイン期限が切れました。再ログインしてください。':adminSaveState==='error'?'保存に失敗しました。再度「保存」を押してください。':'未保存の変更はありません';
@@ -738,7 +750,7 @@ function statusLabel(id){return status(id)==='done'?'視聴完了':status(id)===
 function allIds(node){let a=[...(node.videos||[])];(node.children||[]).forEach(c=>a=a.concat(allIds(c)));return a}
 function nodeCount(node){let ids=allIds(node);return [ids.length,ids.filter(id=>status(id)==='done').length]}
 function categoryIds(cat){return cat.nodes.flatMap(allIds)}
-function navItems(){return state.role==='student'?[['home','ホーム'],['courses','動画一覧'],['favorites','お気に入り'],['commentHistory','コメント・メモ']]:[['adminHome','ダッシュボード'],['structure','講座構成・配置'],['videoManage','動画管理・公開設定'],['students','受講生・招待管理'],['admins','管理者・権限管理'],['commentModeration','コメント管理'],['notices','お知らせ管理']]}
+function navItems(){return state.role==='student'?[['home','ホーム'],['courses','教材一覧'],['favorites','お気に入り'],['commentHistory','コメント・メモ']]:[['adminHome','ダッシュボード'],['structure','講座構成・配置'],['videoManage','動画管理・公開設定'],['articles','記事管理'],['students','受講生・招待管理'],['admins','管理者・権限管理'],['commentModeration','コメント管理'],['notices','お知らせ管理']]}
 function renderNav(){const items=navItems();sidebar.innerHTML=`<div class="mobile-drawer-head"><b style="color:var(--green)">メニュー</b><button onclick="closeMobileMenu()" aria-label="メニューを閉じる">×</button></div>`+items.map(([p,l])=>`<button class="navbtn ${state.page===p?'active':''}" onclick="go('${p}');closeMobileMenu()">${l}</button>`).join('');mobileNav.innerHTML=''}
 function toggleMobileMenu(){const open=!sidebar.classList.contains('open');sidebar.classList.toggle('open',open);mobileMenuOverlay.classList.toggle('open',open);document.body.classList.toggle('mobile-menu-open',open);mobileMenuBtn?.setAttribute('aria-expanded',String(open))}
 function closeMobileMenu(){sidebar.classList.remove('open');mobileMenuOverlay.classList.remove('open');document.body.classList.remove('mobile-menu-open');mobileMenuBtn?.setAttribute('aria-expanded','false')}
@@ -768,11 +780,14 @@ function render(){
  mobileNav.classList.toggle('hidden',!state.isAuthenticated);
  if(!state.isAuthenticated){closeMobileMenu();setLoginRole(loginRoleFromPath());return}
  currentUser.textContent=state.currentUserName||(state.role==='admin'?'デモ 管理者':'山田 花子');
- renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='commentHistory'?commentHistoryPage():state.page==='video'?videoPage():homePage();if(state.page==='video')setTimeout(initMediaProgress,0)}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='commentModeration'?commentModerationPage():noticesPage();saveAdminDataSoon()}
+ renderNav();if(state.role==='student'){main.innerHTML=state.page==='home'?homePage():state.page==='courses'?coursesPage():state.page==='favorites'?favoritesPage():state.page==='commentHistory'?commentHistoryPage():state.page==='video'?videoPage():state.page==='article'?articlePage():homePage();if(state.page==='video')setTimeout(initMediaProgress,0)}else{main.innerHTML=state.page==='adminHome'?adminHome():state.page==='structure'?structurePage():state.page==='videoManage'?videoManage():state.page==='articles'?articlesPage():state.page==='students'?studentsPage():state.page==='admins'?adminsPage():state.page==='commentModeration'?commentModerationPage():noticesPage();saveAdminDataSoon()}
 }
 function homePage(){const done=Object.values(state.videoStatus).filter(x=>x==='done').length,first=videos[0],published=(state.notices||[]).filter(n=>n.published!==false);return `<h1>ホーム</h1><p class="muted">今日も少しずつ学びを進めましょう。</p>${published.map(n=>`<div class="card notice" style="margin-top:18px"><h2>お知らせ</h2><b>${escapeHtml(n.title)}</b><p class="muted" style="white-space:pre-wrap">${escapeHtml(n.body)}</p></div>`).join('')}<div class="grid stats" style="margin-top:18px"><div class="card stat">視聴完了<b>${done}本</b></div><div class="card stat">視聴中<b>${Object.values(state.videoStatus).filter(x=>x==='watching').length}本</b></div><div class="card stat">お気に入り<b>${state.favorites.length}本</b></div></div>${first?`<div class="card" style="margin-top:18px"><h2>前回の続きから</h2><b>${first.title}</b><p class="muted">${Math.round(state.playback[first.id]||0)}%まで視聴</p><button class="btn" onclick="openVideo(${first.id})">続きを見る</button></div>`:`<div class="card" style="margin-top:18px">公開中の動画はまだありません。</div>`}`}
 function videoCard(v){const fav=state.favorites.includes(v.id);return `<div class="video-card"><div class="thumb"><button class="playcircle" onclick="openVideo(${v.id})">▶</button></div><div class="video-body"><div style="display:flex;justify-content:space-between"><span class="badge">NEW</span><button class="heart ${fav?'on':''}" onclick="toggleFav(${v.id})">${fav?'♥':'♡'}</button><button class="btn soft" onclick="completeVideo(${v.id})">視聴完了にする</button></div><h3 style="margin-top:8px">${v.title}</h3><p class="muted" style="font-size:12px">${v.headline}</p><span class="status ${status(v.id)}">${statusLabel(v.id)}</span></div></div>`}
-function coursesPage(){return `<div class="course-toolbar"><div><h1>動画一覧</h1><p class="muted">Chapter / Lesson形式で教材を確認できます。</p></div><div class="searchbox"><input id="courseSearch" placeholder="動画を検索" oninput="filterLessons(this.value)"><span>⌕</span></div></div>${courseCategories.map((cat,ci)=>categoryHtml(cat,ci)).join('')}`}
+function coursesPage(){const published=(state.articles||[]).filter(a=>a.status==='published').sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));return `<div class="course-toolbar"><div><h1>教材一覧</h1><p class="muted">動画・音声・記事をまとめて確認できます。</p></div><div class="searchbox"><input id="courseSearch" placeholder="教材を検索" oninput="filterLessons(this.value)"><span>⌕</span></div></div>${courseCategories.map((cat,ci)=>categoryHtml(cat,ci)).join('')}${published.length?`<section class="article-section"><h2>記事</h2><div class="article-grid">${published.map(articleCard).join('')}</div></section>`:''}`}
+function articleCard(a){return `<button class="article-card" onclick="openArticle('${a.id}')">${a.coverUrl?`<img src="${escapeHtml(a.coverUrl)}" alt="">`:''}<span><b>${escapeHtml(a.title)}</b>${a.summary?`<small>${escapeHtml(a.summary)}</small>`:''}<em>記事を読む →</em></span></button>`}
+function openArticle(id){state.selectedArticle=(state.articles||[]).find(a=>a.id===id)||null;if(!state.selectedArticle)return;state.page='article';render()}
+function articlePage(){const a=state.selectedArticle;if(!a)return coursesPage();return `<button class="btn ghost" onclick="go('courses')">← 教材一覧</button><article class="card article-detail"><h1>${escapeHtml(a.title)}</h1>${a.summary?`<p class="article-lead">${escapeHtml(a.summary)}</p>`:''}${a.coverUrl?`<img class="article-cover" src="${escapeHtml(a.coverUrl)}" alt="">`:''}<div class="article-body">${sanitizeArticleHtml(a.body||'')}</div></article>`}
 function categoryHtml(cat,ci){const ids=categoryIds(cat),done=ids.filter(id=>status(id)==='done').length,open=state.expanded['cat-'+cat.key]!==false;return `<section class="course-category ${cat.key==='ai'?'ai':''}"><div class="category-head" onclick="toggleExpand('cat-${cat.key}')"><div><div style="font-size:20px;font-weight:900">${cat.title}</div><div class="chapter-meta">${ids.length} LESSONS　｜　${done}/${ids.length} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'} chapter-wrap">${cat.nodes.map((n,i)=>chapterHtml(n,cat.key+'-'+i,String(i+1).padStart(2,'0'),false)).join('')}${(cat.videos||[]).length?`<div class="lesson-list">${cat.videos.map((id,i)=>lessonRow(id,i+1)).join('')}</div>`:''}</div></section>`}
 function chapterHtml(node,key,no,nested){const [total,done]=nodeCount(node),open=!!state.expanded[key];return `<div class="chapter"><div class="chapter-head ${nested?'level2':''}" onclick="toggleExpand('${key}')"><div><div class="chapter-title">${node.name.replace(/^\d+｜/,'')}</div><div class="chapter-meta">${total} LESSON${total===1?'':'S'}　｜　${done}/${total} 完了</div></div><button class="toggle">${open?'−':'＋'}</button></div><div class="${open?'':'hidden'}">${(node.children||[]).map((c,i)=>chapterHtml(c,key+'-'+i,String(i+1).padStart(2,'0'),true)).join('')}${(node.videos||[]).length?`<div class="lesson-list">${node.videos.map((id,i)=>lessonRow(id,i+1)).join('')}</div>`:''}</div></div>`}
 function lessonRow(id,i){const v=videos.find(x=>x.id===id),fav=state.favorites.includes(id);return `<div class="lesson-row" data-title="${(v.title+' '+v.headline).toLowerCase()}"><button class="lesson-play" onclick="openVideo(${id})">▶</button><div onclick="openVideo(${id})" style="cursor:pointer"><div class="lesson-title">${v.title}</div><div class="lesson-summary">${v.headline}</div><div class="lesson-meta">${v.duration}</div></div><div class="lesson-actions"><span class="status ${status(id)}">${statusLabel(id)}</span><button class="heart ${fav?'on':''}" onclick="event.stopPropagation();toggleFav(${id})">${fav?'♥':'♡'}</button></div></div>`}
@@ -1806,6 +1821,55 @@ function previewFavorites(){
 function addNotice(){const title=document.getElementById('noticeTitle').value.trim(),body=document.getElementById('noticeBody').value.trim();if(!title||!body)return alert('タイトルと本文を入力してください');state.notices.unshift({id:'notice-'+Date.now(),title,body,published:true,createdAt:Date.now()});render()}
 function toggleNotice(id){const notice=state.notices.find(n=>n.id===id);if(notice){notice.published=!notice.published;render()}}
 function deleteNotice(id){if(confirm('このお知らせを削除しますか？')){state.notices=state.notices.filter(n=>n.id!==id);render()}}
+
+function sanitizeArticleHtml(html){
+ const doc=new DOMParser().parseFromString('<div>'+String(html||'')+'</div>','text/html');
+ const allowed=new Set(['P','BR','H2','H3','H4','STRONG','B','EM','I','U','UL','OL','LI','BLOCKQUOTE','A','IMG','HR']);
+ const dangerous=new Set(['SCRIPT','STYLE','IFRAME','OBJECT','EMBED','FORM','INPUT','BUTTON','LINK','META']);
+ [...doc.body.querySelectorAll('*')].forEach(el=>{
+  if(el.tagName==='DIV'&&el.parentElement===doc.body)return;
+  if(dangerous.has(el.tagName)){el.remove();return}
+  if(!allowed.has(el.tagName)){el.replaceWith(...el.childNodes);return}
+  const href=el.tagName==='A'?(el.getAttribute('href')||''):'';
+  const src=el.tagName==='IMG'?(el.getAttribute('src')||''):'';
+  const alt=el.tagName==='IMG'?(el.getAttribute('alt')||''):'';
+  [...el.attributes].forEach(attr=>el.removeAttribute(attr.name));
+  if(el.tagName==='A'){
+   try{const u=new URL(href,location.origin);if(u.protocol!=='https:')throw 0;el.setAttribute('href',u.href);el.setAttribute('target','_blank');el.setAttribute('rel','noopener noreferrer')}catch(e){el.replaceWith(...el.childNodes)}
+  }
+  if(el.tagName==='IMG'){
+   try{const u=new URL(src,location.origin);if(u.protocol!=='https:')throw 0;el.setAttribute('src',u.href);el.setAttribute('alt',alt)}catch(e){el.remove()}
+  }
+ });
+ return doc.body.firstElementChild?.innerHTML||'';
+}
+function articlesPage(){
+ const items=[...(state.articles||[])].sort((a,b)=>(b.updatedAt||0)-(a.updatedAt||0));
+ return `<div class="admin-toolbar"><div><h1>記事管理</h1><p class="muted">見たまま編集で記事を作成し、教材一覧へ公開できます。</p></div><button class="btn" onclick="openArticleEditor()">＋記事を作成</button></div><div class="card admin-section">${items.length?items.map(a=>`<div class="article-admin-row"><div><b>${escapeHtml(a.title)}</b><p class="muted">${a.status==='published'?'公開中':'下書き'}　更新：${new Date(a.updatedAt||a.createdAt||Date.now()).toLocaleDateString('ja-JP')}</p></div><div class="action-row"><button class="btn soft" onclick="openArticleEditor('${a.id}')">編集</button><button class="btn ghost" onclick="toggleArticlePublish('${a.id}')">${a.status==='published'?'非公開にする':'公開する'}</button><button class="btn ghost" onclick="deleteArticle('${a.id}')">削除</button></div></div>`).join(''):'<p class="muted">記事はまだありません。</p>'}</div>`;
+}
+function openArticleEditor(id=''){
+ const a=(state.articles||[]).find(x=>x.id===id)||{title:'',summary:'',coverUrl:'',body:'<p></p>',status:'draft'};
+ adminModalTitle.textContent=id?'記事を編集':'記事を作成';
+ adminModalBody.innerHTML=`<div class="inline-form article-editor"><label>タイトル</label><input id="articleTitle" value="${escapeHtml(a.title)}" placeholder="記事タイトル"><label>概要（任意）</label><textarea id="articleSummary" rows="2" placeholder="教材一覧に表示する短い説明">${escapeHtml(a.summary||'')}</textarea><label>カバー画像URL（任意・HTTPS）</label><input id="articleCoverUrl" value="${escapeHtml(a.coverUrl||'')}" placeholder="https://..."><label>本文</label><div class="editor-toolbar"><button type="button" onclick="formatArticle('formatBlock','h2')">見出し</button><button type="button" onclick="formatArticle('bold')"><b>B</b></button><button type="button" onclick="formatArticle('italic')"><i>I</i></button><button type="button" onclick="formatArticle('underline')"><u>U</u></button><button type="button" onclick="formatArticle('insertUnorderedList')">箇条書き</button><button type="button" onclick="formatArticle('insertOrderedList')">番号リスト</button><button type="button" onclick="insertArticleLink()">リンク</button><button type="button" onclick="insertArticleImage()">画像</button><button type="button" onclick="formatArticle('removeFormat')">書式解除</button></div><div id="articleBody" class="wysiwyg" contenteditable="true">${sanitizeArticleHtml(a.body||'')}</div><label>公開状態</label><select id="articleStatus"><option value="draft" ${a.status!=='published'?'selected':''}>下書き（非公開）</option><option value="published" ${a.status==='published'?'selected':''}>公開</option></select><button class="btn" style="width:100%;margin-top:14px" onclick="saveArticle('${id}')">保存</button></div>`;
+ adminModal.classList.remove('hidden');
+}
+function formatArticle(command,value=null){document.getElementById('articleBody')?.focus();document.execCommand(command,false,value)}
+function insertArticleLink(){const url=prompt('リンク先URL（https://）');if(!url)return;try{const u=new URL(url);if(u.protocol!=='https:')throw 0;formatArticle('createLink',u.href)}catch(e){alert('https:// から始まるURLを入力してください')}}
+function insertArticleImage(){const url=prompt('画像URL（https://）');if(!url)return;try{const u=new URL(url);if(u.protocol!=='https:')throw 0;formatArticle('insertImage',u.href)}catch(e){alert('https:// から始まるURLを入力してください')}}
+function saveArticle(id){
+ const title=document.getElementById('articleTitle').value.trim(),summary=document.getElementById('articleSummary').value.trim(),coverUrl=document.getElementById('articleCoverUrl').value.trim(),body=sanitizeArticleHtml(document.getElementById('articleBody').innerHTML),status=document.getElementById('articleStatus').value;
+ if(!title)return alert('タイトルを入力してください');
+ const text=new DOMParser().parseFromString(body,'text/html').body.textContent.trim();
+ if(!text&&!body.includes('<img'))return alert('本文を入力してください');
+ if(coverUrl){try{const u=new URL(coverUrl);if(u.protocol!=='https:')throw 0}catch(e){return alert('カバー画像は https:// から始まるURLを入力してください')}}
+ const now=Date.now(),existing=(state.articles||[]).find(a=>a.id===id);
+ const item={id:id||'article-'+now,title,summary,coverUrl,body,status,createdAt:existing?.createdAt||now,updatedAt:now};
+ state.articles=existing?state.articles.map(a=>a.id===id?item:a):[item,...(state.articles||[])];
+ closeAdminModal();render();saveAdminDataNow(false);
+}
+function toggleArticlePublish(id){const a=(state.articles||[]).find(x=>x.id===id);if(!a)return;a.status=a.status==='published'?'draft':'published';a.updatedAt=Date.now();render();saveAdminDataNow(false)}
+function deleteArticle(id){if(!confirm('この記事を削除しますか？'))return;state.articles=(state.articles||[]).filter(a=>a.id!==id);render();saveAdminDataNow(false)}
+
 function noticesPage(){
  return `<div class="admin-toolbar"><div><h1>お知らせ管理</h1><p class="muted">公開中のお知らせは講座生ホームに表示されます。</p></div></div><div class="card admin-section"><h2>お知らせを追加</h2><div class="inline-form"><label>タイトル</label><input id="noticeTitle" placeholder="例：教材追加のお知らせ"><label>本文</label><textarea id="noticeBody" rows="5" placeholder="講座生へ伝える内容"></textarea><button class="btn" onclick="addNotice()">追加して公開</button></div></div>${(state.notices||[]).map(n=>`<div class="card notice admin-section"><div class="admin-toolbar"><div><b>${escapeHtml(n.title)}</b><p class="muted" style="white-space:pre-wrap">${escapeHtml(n.body)}</p></div><div class="action-row"><button class="btn soft" onclick="toggleNotice('${n.id}')">${n.published!==false?'非公開にする':'公開する'}</button><button class="btn ghost" onclick="deleteNotice('${n.id}')">削除</button></div></div></div>`).join('')}`;
 }
