@@ -22,7 +22,8 @@ export default async function handler(req, res) {
         addedVideos:publicAddedVideos,
         videoVisibility:data.videoVisibility||{},
         videos:publicBaseVideos,
-        notices:(data.notices||[]).filter(notice=>notice.published!==false)
+        notices:(data.notices||[]).filter(notice=>notice.published!==false),
+        articles:(data.articles||[]).filter(article=>article.status==='published')
       }});
     }
     return res.status(200).json({ data });
