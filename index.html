@@ -627,9 +627,14 @@ async function loadAdminData(){
  adminDataLoaded=true;
  if(!data||newest===backup){const sync=await fetch('/api/content',{method:'PUT',headers:{'content-type':'application/json'},body:JSON.stringify({data:newest||adminDataSnapshot()})});if(!sync.ok)throw new Error(`sync_failed_${sync.status}`)}
  adminSaveState='saved';adminLastSavedAt=new Date().toLocaleTimeString('ja-JP',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+ await loadAdminAccounts();
  await loadLearnerAccounts();
  await loadAdminComments();
  await loadLearnerActivity();
+}
+async function loadAdminAccounts(){
+ const response=await fetch('/api/admin-invite?action=list',{cache:'no-store'});
+ if(response.ok)state.adminAccounts=(await response.json()).accounts||[];
 }
 async function loadLearnerAccounts(){
  const response=await fetch('/api/invite?action=applications');
@@ -1724,7 +1729,7 @@ async function completePasswordResetFromLink(token){
 function adminsPage(){
  const url=state.adminInviteUrl||'管理者用URLはまだ発行されていません';
  return `<div class="admin-toolbar">
-  <div><div class="admin-kicker">ADMIN ACCESS</div><h1>管理者・権限管理</h1><p class="muted">管理者アカウントも招待制で登録します。発行時に権限を指定できます。</p></div>
+  <div><div class="admin-kicker">ADMIN ACCESS</div><h1>管理者・権限管理</h1><p class="muted">管理者アカウントを招待URLから登録できます。招待URLの有効期限は7日間・1回限りです。</p></div>
   <button class="btn" onclick="generateAdminInvite()">＋ 管理者用URLを発行</button>
  </div>
  <div class="card admin-section">
@@ -1732,61 +1737,36 @@ function adminsPage(){
   <div class="role-grid">
    <div class="role-card"><label style="font-size:12px;font-weight:800">発行する権限</label>
     <select id="adminRoleSelect" onchange="state.adminInviteRole=this.value" style="width:100%;margin-top:7px"><option ${state.adminInviteRole==='管理者'?'selected':''}>管理者</option><option ${state.adminInviteRole==='編集者'?'selected':''}>編集者</option></select>
-    <p class="muted" style="font-size:11px">管理者：アカウント・招待を含む全機能<br>編集者：教材・動画・お知らせ編集を想定</p>
+    <p class="muted" style="font-size:11px">管理者：アカウント・招待を含む全機能<br>編集者：教材・動画・お知らせ編集用</p>
    </div>
-   <div class="role-card"><b>招待制</b><p class="muted" style="font-size:12px">URLから名前・メール・パスワードを登録し、指定権限でアカウントを作成します。</p></div>
+   <div class="role-card"><b>招待制</b><p class="muted" style="font-size:12px">URLを受け取った方が、名前・メール・パスワードを登録します。登録後は管理者ログインURLからログインできます。</p></div>
   </div>
-  <div class="invite-url"><input value="${url}" readonly><button class="btn soft" onclick="copyAdminInvite()">コピー</button><button class="btn ghost" onclick="openAdminRegistration()">登録画面を確認</button></div>
+  <div class="invite-url"><input value="${escapeHtml(url)}" readonly><button class="btn soft" onclick="copyAdminInvite()">コピー</button><button class="btn ghost" onclick="openAdminRegistration()">登録画面を確認</button></div>
  </div>
  <div class="card admin-section">
-  <div class="admin-toolbar"><div><h2 style="margin:0">管理者ログイン</h2><div class="muted" style="font-size:12px">メールアドレス＋パスワード</div></div><button class="auth-link" onclick="openPasswordReset('管理者')">パスワードを忘れた場合</button></div>
+  <div class="admin-toolbar"><div><h2 style="margin:0">管理者ログイン</h2><div class="muted" style="font-size:12px">メールアドレス＋パスワード</div></div><a class="btn ghost" href="/admin/login" target="_blank" rel="noopener">ログイン画面を開く</a></div>
  </div>
-
  <div class="card admin-section">
-  <h2>管理者アカウント</h2>
+  <div class="admin-toolbar"><h2 style="margin:0">管理者アカウント</h2><button class="btn ghost" onclick="loadAdminAccounts().then(render)">更新</button></div>
   <table class="table"><tr><th>名前</th><th>メール</th><th>権限</th><th>状態</th><th>操作</th></tr>
-   ${state.adminAccounts.map((a,i)=>`<tr><td>${a.name}</td><td>${a.email}</td><td><span class="role-tag">${a.role}</span></td><td><span class="status-pill ${a.status==='active'?'active':'disabled'}">${a.status==='active'?'有効':'無効'}</span></td><td>${a.status==='active'?`<button class="btn ghost" onclick="disableAdmin(${i})">無効にする</button>`:`<button class="btn soft" onclick="enableAdmin(${i})">再有効化</button>`}</td></tr>`).join('')}
+   ${state.adminAccounts.map(a=>`<tr><td>${escapeHtml(a.name)}</td><td>${escapeHtml(a.email)}</td><td><span class="role-tag">${escapeHtml(a.role)}</span></td><td><span class="status-pill ${a.status==='active'?'active':'disabled'}">${a.status==='active'?'有効':'無効'}</span></td><td>${a.immutable?'<span class="muted">サイト管理者</span>':a.status==='active'?`<button class="btn ghost" onclick="setAdminStatus(${a.id},'disabled')">無効にする</button>`:`<button class="btn soft" onclick="setAdminStatus(${a.id},'active')">再有効化</button>`}</td></tr>`).join('')}
   </table>
  </div>`;
 }
-function generateAdminInvite(){
+async function generateAdminInvite(){
  const role=document.getElementById('adminRoleSelect')?.value||state.adminInviteRole||'管理者';
- state.adminInviteRole=role;
- state.adminInviteUrl='https://beginning.example/admin-invite/'+(role==='管理者'?'admin':'editor')+'-'+Math.random().toString(36).slice(2,8);
- state.adminInviteUsed=false;
- render();
+ const response=await fetch('/api/admin-invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'generate',role})});
+ if(!response.ok)return alert('管理者用URLを発行できませんでした。再ログイン後にもう一度お試しください。');
+ const result=await response.json();state.adminInviteRole=result.role;state.adminInviteUrl=result.url;render();
 }
-function copyAdminInvite(){
- if(!state.adminInviteUrl)return alert('先に管理者用URLを発行してください');
- navigator.clipboard?.writeText(state.adminInviteUrl);alert('管理者用URLをコピーしました');
+function copyAdminInvite(){if(!state.adminInviteUrl)return alert('先に管理者用URLを発行してください');navigator.clipboard?.writeText(state.adminInviteUrl);alert('管理者用URLをコピーしました')}
+function openAdminRegistration(){if(!state.adminInviteUrl)return alert('先に管理者用URLを発行してください');window.open(state.adminInviteUrl,'_blank','noopener')}
+async function setAdminStatus(id,status){
+ if(!confirm(status==='disabled'?'この管理者を無効にしますか？':'この管理者を再有効化しますか？'))return;
+ const response=await fetch('/api/admin-invite',{method:'PATCH',headers:{'content-type':'application/json'},body:JSON.stringify({id,status})});
+ if(!response.ok)return alert('状態を変更できませんでした。自分自身のアカウントは無効にできません。');
+ await loadAdminAccounts();render();
 }
-function openAdminRegistration(){
- if(!state.adminInviteUrl)generateAdminInvite();
- if(state.adminInviteUsed){
-  adminModalTitle.textContent='管理者招待URL';
-  adminModalBody.innerHTML=`<div class="auth-card"><div class="invite-state used">使用済み</div><h2 style="margin-top:12px">この招待URLは使用済みです</h2><p class="muted">一度登録に使用された管理者用URLは再利用できません。新しいURLを発行してください。</p></div>`;
-  adminModal.classList.remove('hidden');
-  return;
- }
- adminModalTitle.textContent='管理者側：初回登録';
- adminModalBody.innerHTML=`<div class="inline-form">
-  <div class="role-tag" style="margin-bottom:10px">権限：${state.adminInviteRole}</div>
-  <label>名前</label><input id="adminRegName" placeholder="管理者名">
-  <label>メールアドレス</label><input id="adminRegEmail" type="email" placeholder="admin@example.com">
-  <label>パスワード</label><input id="adminRegPassword" type="password" placeholder="8文字以上">
-  <button class="btn" style="width:100%;margin-top:16px" onclick="submitAdminRegistration()">管理者アカウントを登録</button>
- </div>`;
- adminModal.classList.remove('hidden');
-}
-function submitAdminRegistration(){
- const name=document.getElementById('adminRegName').value.trim(),email=document.getElementById('adminRegEmail').value.trim(),password=document.getElementById('adminRegPassword').value;
- if(!name||!email||!password)return alert('名前・メール・パスワードを入力してください');
- state.adminAccounts.push({name,email,role:state.adminInviteRole,status:'active'});
- state.adminInviteUsed=true;
- closeAdminModal();render();
-}
-function disableAdmin(i){state.adminAccounts[i].status='disabled';render()}
-function enableAdmin(i){state.adminAccounts[i].status='active';render()}
 
 function commentModerationPage(){
  return `<div class="admin-toolbar"><div><div class="admin-kicker">COMMENT MODERATION</div><h1>コメント管理</h1><p class="muted">講座生が動画へ投稿したコメントを確認し、表示状態を管理します。</p></div><button class="btn ghost" onclick="loadAdminComments().then(render)">更新</button></div>
@@ -2080,9 +2060,33 @@ function renderInviteLanding(token){
  document.body.innerHTML=`<main style="max-width:520px;margin:8vh auto;padding:20px"><div class="card"><div class="brand">Begininng 教材サイト</div><h1 style="margin-top:18px">講座生の参加申請</h1><p class="muted">お名前・メールアドレス・パスワードを登録してください。管理者承認後にログインできます。</p><div class="inline-form"><label>名前</label><input id="inviteName"><label>メールアドレス</label><input id="inviteEmail" type="email"><label>パスワード（8文字以上）</label><input id="invitePassword" type="password"><button class="btn" style="width:100%;margin-top:18px" onclick="submitInviteRegistration('${token}')">登録して参加申請</button><p id="inviteMessage" class="muted"></p></div></div></main>`;
 }
 async function submitInviteRegistration(token){const name=inviteName.value.trim(),email=inviteEmail.value.trim(),password=invitePassword.value;const response=await fetch('/api/invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'register',token,name,email,password})});inviteMessage.textContent=response.ok?'参加申請を受け付けました。管理者の承認をお待ちください。':'招待URLが無効か、入力内容に不足があります。';if(response.ok)document.querySelector('button').disabled=true}
+function renderAdminInviteLanding(token){
+ document.body.innerHTML=`<main style="max-width:560px;margin:7vh auto;padding:20px"><div class="card"><div class="brand">Begininng 教材サイト</div><div id="adminInviteRole" class="role-tag" style="margin-top:18px">招待内容を確認中…</div><h1 style="margin-top:16px">管理者アカウント登録</h1><p class="muted">お名前・メールアドレス・8文字以上のパスワードを登録してください。</p><div class="inline-form"><label>名前</label><input id="adminInviteName" autocomplete="name"><label>メールアドレス</label><input id="adminInviteEmail" type="email" autocomplete="email"><label>パスワード（8文字以上）</label><input id="adminInvitePassword" type="password" autocomplete="new-password"><label>パスワード（確認）</label><input id="adminInvitePasswordConfirm" type="password" autocomplete="new-password"><button id="adminInviteSubmit" class="btn" style="width:100%;margin-top:18px" onclick="submitAdminInviteRegistration('${token}')">登録する</button><p id="adminInviteMessage" class="muted"></p></div></div></main>`;
+ fetch('/api/admin-invite?action=validate&token='+encodeURIComponent(token)).then(async response=>{
+  if(!response.ok)throw new Error();
+  const result=await response.json();document.getElementById('adminInviteRole').textContent='権限：'+result.role;
+ }).catch(()=>{document.querySelector('main').innerHTML='<div class="card"><h1>この招待URLは使用できません</h1><p class="muted">期限切れ、またはすでに使用済みです。サイト管理者へ新しいURLの発行を依頼してください。</p></div>'});
+}
+async function submitAdminInviteRegistration(token){
+ const name=document.getElementById('adminInviteName').value.trim();
+ const email=document.getElementById('adminInviteEmail').value.trim();
+ const password=document.getElementById('adminInvitePassword').value;
+ const confirmPassword=document.getElementById('adminInvitePasswordConfirm').value;
+ const message=document.getElementById('adminInviteMessage');
+ if(!name||!email||password.length<8){message.textContent='名前・メールアドレス・8文字以上のパスワードを入力してください。';message.style.color='#b42318';return}
+ if(password!==confirmPassword){message.textContent='確認用パスワードが一致しません。';message.style.color='#b42318';return}
+ const button=document.getElementById('adminInviteSubmit');button.disabled=true;button.textContent='登録中…';
+ const response=await fetch('/api/admin-invite',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({action:'register',token,name,email,password})});
+ if(response.ok){document.querySelector('main').innerHTML=`<div class="card"><div class="invite-state unused">登録完了</div><h1 style="margin-top:16px">管理者アカウントを登録しました</h1><p class="muted">登録したメールアドレスとパスワードでログインできます。</p><a class="btn" style="display:inline-block;text-decoration:none;margin-top:12px" href="/admin/login">管理者ログインへ</a></div>`;return}
+ const result=await response.json().catch(()=>({}));
+ button.disabled=false;button.textContent='登録する';
+ message.textContent=result.error==='account_exists'?'このメールアドレスはすでに登録されています。':result.error==='invalid_or_expired'?'招待URLが期限切れ、または使用済みです。':'登録できませんでした。入力内容を確認してください。';
+ message.style.color='#b42318';
+}
 const inviteToken=location.pathname.match(/^\/invite\/([^/]+)/)?.[1];
+const adminInviteToken=location.pathname.match(/^\/admin\/invite\/([^/]+)/)?.[1];
 const resetToken=new URLSearchParams(location.search).get('resetToken');
-if(inviteToken)renderInviteLanding(inviteToken);else if(resetToken)renderPasswordResetLanding(resetToken);else{setLoginRole(loginRoleFromPath());restoreSession()}
+if(inviteToken)renderInviteLanding(inviteToken);else if(adminInviteToken)renderAdminInviteLanding(adminInviteToken);else if(resetToken)renderPasswordResetLanding(resetToken);else{setLoginRole(loginRoleFromPath());restoreSession()}
 </script>
 
 <div class="modal hidden" id="adminModal">
